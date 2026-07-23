@@ -1,0 +1,19 @@
+name: vgc
+channels:
+  - conda-forge
+dependencies:
+  - python=3.12
+  # modello bayesiano
+  - pymc
+  - arviz
+  - h5netcdf          # backend per salvare il posterior in NetCDF
+  # dati e pulizia
+  - requests
+  - rapidfuzz         # fuzzy match per la canonicalizzazione
+  # analisi
+  - numpy
+  - pandas
+  - matplotlib
+  - jupyterlab
+  # modello neurale (opzionale, commenta se non serve)
+  - pytorch

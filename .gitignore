@@ -1,0 +1,25 @@
+# dati rigenerabili dalla pipeline
+data/
+pokeapi_csv/
+
+# artefatti pesanti dei modelli
+models/
+*.nc
+*.pt
+bt_artifacts.json
+neural_vocab.json
+
+# python
+__pycache__/
+*.py[cod]
+.ipynb_checkpoints/
+.venv/
+env/
+
+# scratch / editor
+tempCodeRunnerFile.py
+struttura.txt
+_preview.png
+.vscode/
+.idea/
+.DS_Store
