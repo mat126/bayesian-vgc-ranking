@@ -69,11 +69,25 @@ def build_vocabs(matches, min_freq):
     return vocab, tot
 
 
-def build_matrices(matches, vocab):
+def build_matrices(matches, vocab, min_player_matches=1):
+    """min_player_matches: un giocatore riceve un effetto proprio solo se ha almeno
+    N match. Gli altri vengono mandati su un indice sentinella (= len(players)) il cui
+    effetto e' fissato a 0 nel modello, cioe' vengono poolati sulla media.
+    Serve al condizionamento: i giocatori con 2-3 match sono direzioni quasi piatte
+    del posterior e costringono NUTS a traiettorie lunghissime."""
     M = len(matches)
     X = {b: np.zeros((M, len(vocab[b])), dtype=np.float32) for b in ALL_BLOCKS}
+
+    freq = collections.Counter()
+    for m in matches:
+        freq[m["player1"]] += 1
+        freq[m["player2"]] += 1
+    keep = {p for p, n in freq.items() if n >= min_player_matches}
+
     players = {}
     def pid(p):
+        if p not in keep:
+            return -1                      # segnaposto, rimappato a n_players dopo
         return players.setdefault(p, len(players))
     p1 = np.empty(M, dtype=np.int64)
     p2 = np.empty(M, dtype=np.int64)
@@ -92,6 +106,9 @@ def build_matrices(matches, vocab):
                     X[b][i, j] -= n
         p1[i], p2[i] = pid(m["player1"]), pid(m["player2"])
         y[i] = m["label"]
+    n = len(players)
+    p1[p1 < 0] = n                          # sentinella -> ultimo indice (effetto 0)
+    p2[p2 < 0] = n
     inv_players = {v: k for k, v in players.items()}
     return X, p1, p2, y, players, inv_players
 
