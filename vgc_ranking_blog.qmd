@@ -1,0 +1,562 @@
+---
+title: "Who Enters Worlds as the Favourite? A Bayesian Ranking Model for Competitive Pokémon VGC"
+subtitle: "Hierarchical Bradley-Terry models, factorisation-machine synergy, and a Set Transformer — what 17,581 tournament matches actually tell us about the Regulation M-B metagame"
+author: "Matteo Morella"
+date: "2026-07-25"
+categories: [bayesian-statistics, pymc, pokemon, ranking-models, deep-learning]
+format:
+  html:
+    toc: true
+    toc-depth: 3
+    code-fold: true
+    number-sections: true
+    theme: cosmo
+    link-external-newwindow: true
+---
+
+## The question, and why it is harder than it looks
+
+Every August, the Pokémon Video Game Championships crown a world champion. In 2026 the
+tournament runs on *Pokémon Champions* under Regulation Set M-B — a format with Mega
+Evolutions, without Terastallization, and with a metagame that has had only a few months to
+crystallise. The question every competitive player asks in the run-up is the same one every
+sports analyst asks before a major: **who enters as the favourite?**
+
+For most sports this is a solved problem in outline: collect head-to-head results, fit a
+paired-comparison model, read off the latent strengths. Elo does it for chess; my earlier
+[Bayesian UEFA Swiss-system simulator](https://github.com/mat126/bayesian-uefa-swiss) does it
+for club football. VGC breaks the standard recipe in two specific places, and this project is
+essentially the story of repairing both.
+
+**The first break: the unit of competition is combinatorial.** A VGC "competitor" is not a
+fixed entity like a chess player. It is a team of six Pokémon, and each Pokémon is itself a
+bundle of choices: four moves from a large learnset, one ability, one held item, one nature.
+Two teams sharing all six species can still be meaningfully different builds. The consequence
+is brutal for any model that assigns a free strength parameter per competitor: in my final
+dataset of 17,581 matches there are **5,393 distinct teams, of which only 95 appear five or
+more times**. A classical Bradley-Terry model with one parameter per team would have roughly
+one observation per parameter. Nothing identifiable survives that.
+
+**The second break: the data does not come as head-to-head outcomes.** The community's
+best-known statistics — usage rates from Victory Road or Pikalytics — tell you *how often* a
+Pokémon is brought, not *who beats whom*. Usage is a popularity contest confounded with
+strength; a paired-comparison likelihood needs pairings and winners with both teams observed.
+That data exists, but it has to be assembled, and it arrives dirty in ways worth documenting.
+
+The rest of this post walks through the pipeline (briefly), then through three models in
+increasing order of expressiveness — an additive hierarchical Bayesian Bradley-Terry, the
+same model with a low-rank synergy term, and a fully non-linear Set Transformer — with the
+mathematics spelled out, and finally through what the fitted models actually say about the
+Regulation M-B metagame. The punchline is not the ranking itself. The punchline is what the
+posterior uncertainty does to the ranking, and how much of the outcome signal turns out to
+live somewhere other than the team sheet.
+
+## Building a head-to-head dataset
+
+### The source
+
+The workable source turned out to be the **public Limitless API**. Limitless hosts a large
+share of the online VGC tournament circuit, and — crucially — requires teamlist submission.
+Its `standings` endpoint returns each player's full structured teamlist (species, item,
+ability, nature, four moves per slot), and its `pairings` endpoint returns per-round pairings
+with winners. Joining the two yields exactly the object a Bradley-Terry likelihood wants:
+
+$$
+(\text{team}_A,\ \text{team}_B,\ y), \qquad y = \mathbb{1}[\text{A won}].
+$$
+
+One subtlety: a `pairings` row is one *match*, not one game, so a best-of-three enters as a
+single Bernoulli observation with the series winner. That is coherent with the likelihood
+below, though it does mean a Bo3 row carries the same nominal weight as a Bo1 row.
+
+The final pull: **17,581 decisive matches** across Regulation M-B tournaments, involving
+**3,878 distinct players**, with complete teamlists on both sides of every match.
+
+### The cleaning problem nobody warns you about
+
+Teamlists are submitted by players in the language of their own game copy. The raw data
+therefore contained *56 distinct "natures"* — in a game that has exactly 25. "Modest",
+"Modesta", "Modeste" and "MODESTA" all name the same thing; "Adament", "Adman" and "Adanant"
+are all attempts at "Adamant"; and a nonzero number of players typed an ability into the
+nature field. Moves and abilities were polluted the same way (861 raw "moves", 294 raw
+"abilities").
+
+What rescues this from being a data-cleaning nightmare is that **the vocabulary is closed and
+known**. There are exactly 25 natures, ~300 abilities, ~900 moves, each with official names in
+every localisation, all published in PokéAPI's multilingual CSV tables. Canonicalisation then
+becomes an almost fully automatic cascade: normalise to a slug (lowercase, strip accents and
+punctuation), exact-match against the multilingual table (which resolves *every* official
+language in one step), fuzzy-match the residue against the canonical English list (which
+resolves typos — "Timmid" has exactly one plausible neighbour), and hand-map the last dozen
+tokens.
+
+One class of "unresolved" tokens was deliberately left alone: **the new Champions Mega
+Stones**. Floettite (6,598 occurrences), Raichunite Y, Staraptite, Delphoxite and 49 others do
+not exist in PokéAPI because the game postdates it. They are internally consistent strings,
+so they function perfectly well as features — and, as we will see, they matter.
+
+## Model 1: a hierarchical Bayesian Bradley-Terry with structured strength
+
+### The likelihood
+
+The Bradley-Terry model (Bradley & Terry, 1952) assigns each competitor a latent strength
+$s \in \mathbb{R}$ and links the win probability to the strength *difference* through the
+logistic function:
+
+$$
+P(A \text{ beats } B) \;=\; \sigma\big(s(A) - s(B)\big), \qquad
+\sigma(z) = \frac{1}{1+e^{-z}}.
+$$
+
+Each match contributes a Bernoulli term, and the full log-likelihood is a sum over matches.
+The difference structure has a property worth making explicit because everything downstream
+inherits it: it enforces **antisymmetry by construction**, $P(A>B) = 1 - P(B>A)$, and any
+constant added to *all* strengths cancels. Strengths are identified only up to location —
+which will come back as a modelling decision shortly.
+
+Two additions to the bare likelihood. A **side intercept** $c$ absorbs any systematic
+player1/player2 asymmetry (in this data, player1 wins 51.3% of the time — small, but real,
+and better modelled than ignored). And a **player skill term**: writing $\pi_1(m), \pi_2(m)$
+for the pilots in match $m$,
+
+$$
+\eta_m \;=\; c \;+\; \big(s(A_m) - s(B_m)\big) \;+\; \big(\lambda_{\pi_1(m)} - \lambda_{\pi_2(m)}\big),
+\qquad y_m \sim \text{Bernoulli}\big(\sigma(\eta_m)\big).
+$$
+
+The player term is not decoration. Strong players choose strong teams; without $\lambda$, the
+skill of good pilots leaks into the coefficients of whatever they happen to bring, and the
+model measures *who* plays rather than *what* is played. Foreshadowing: this term will turn
+out to be the single most important component of the entire model.
+
+### Decomposing strength
+
+The move that makes the combinatorics tractable is to refuse to give teams free parameters.
+A team $T$ is a set of six builds; each build $b$ has a species $\sigma(b)$, a move-set
+$\mathcal{M}(b)$ (four moves), an ability $a(b)$, an item $i(b)$ and a nature $\nu(b)$.
+Strength is defined *compositionally*:
+
+$$
+s(T) \;=\; \sum_{b \in T} \varphi(b), \qquad
+\varphi(b) \;=\; \alpha_{\sigma(b)} \;+\; \sum_{k \in \mathcal{M}(b)} \mu_k
+\;+\; \beta_{a(b)} \;+\; \gamma_{i(b)} \;+\; \delta_{\nu(b)}.
+$$
+
+Every effect is a log-odds contribution: $\alpha$ for species (the anchor), $\mu$ for moves,
+$\beta$ for abilities, $\gamma$ for items, $\delta$ for natures. A team never seen before
+still receives a coherent strength, assembled from parts that recur across thousands of
+matches. This is what converts 5,393 unidentifiable team parameters into roughly a thousand
+well-shared feature parameters (219 species + 420 moves + 162 items + 168 abilities + 23
+natures after frequency thresholding).
+
+There is a computational identity hiding here that makes implementation almost embarrassingly
+simple. Because $s(T)$ is **linear in feature counts**, collect the counts into a vector
+$x_T$ (how many times each species, move, item... appears in the team — note moves genuinely
+count above one: a team running Protect on four slots has a Protect count of 4). Then
+
+$$
+s(A) - s(B) \;=\; \theta^\top (x_A - x_B),
+$$
+
+with $\theta$ stacking all the coefficient blocks. The additive Bradley-Terry with structured
+strength *is* a logistic regression on the **difference of count vectors**. The design matrix
+of the whole project is that difference, one row per match.
+
+### The hierarchy: why rare items do not wreck the model
+
+Rare levels are everywhere in this data — items brought a handful of times, moves on one
+niche set. Maximum likelihood would assign them wild coefficients. The Bayesian answer is
+**partial pooling** through a scale hierarchy: each block gets its own dispersion parameter,
+
+$$
+\alpha_\sigma \sim \mathcal{N}(0, \tau_\alpha^2), \quad
+\mu_k \sim \mathcal{N}(0, \tau_\mu^2), \quad \ldots \quad
+\lambda_\pi \sim \mathcal{N}(0, \tau_\lambda^2),
+$$
+
+with half-normal hyperpriors on every $\tau$. A rarely-seen item is shrunk toward zero in
+proportion to how weakly the data supports it; a frequent one is free to take whatever value
+the matches indicate. No arbitrary cutoff decides this — the $\tau$'s, estimated from the
+data, do.
+
+The $\tau$'s also serve a second role that ends up carrying the headline result: they are a
+**variance decomposition**. $\tau_{\text{player}}$ versus $\tau_{\text{species}}$ answers,
+directly, "how much of the outcome variation is pilot, and how much is team sheet?"
+
+Two technical points that cost real debugging time and deserve to be written down.
+
+**Identifiability.** Every team has exactly six species, so adding a constant $\kappa$ to all
+$\alpha$'s adds $6\kappa$ to every strength and cancels in every difference. Left alone, the
+chains drift along this flat direction. The fix is a **sum-to-zero constraint** per block
+(PyMC's `ZeroSumNormal`), after which every coefficient reads as "relative to its block
+average".
+
+**The funnel.** `ZeroSumNormal` is non-centred *with respect to the sum-to-zero constraint* —
+but **not** with respect to the hierarchical scale. Writing `ZeroSumNormal(sigma=tau)` keeps
+the centred parameterisation in $\tau$, and with 1,657 player effects hanging off a single
+scale, that is a textbook funnel (Betancourt & Girolami, 2015): the sampler's step size collapses (I
+watched chains freeze at $\epsilon = 0.001$ while their siblings adapted to $0.1$). The cure
+is the explicit non-centred form,
+
+$$
+\tilde\lambda_\pi \sim \mathcal{N}(0,1) \ \text{(sum-to-zero)}, \qquad
+\lambda_\pi = \tau_\lambda \, \tilde\lambda_\pi,
+$$
+
+which decouples the geometry of the raw variables from the scale. After this change, step
+sizes doubled and gradient evaluations per draw dropped from 255–1023 to a uniform 31.
+
+**Conditioning.** One more practical surgery: of the 3,878 players, most appear in a handful
+of matches. A player with two matches has an essentially unidentified $\lambda$ — a flat
+direction that forces NUTS into maximal-depth trajectories. Players below eight matches were
+therefore pooled to a shared zero effect (their *matches* remain in the likelihood and keep
+informing the team-level effects; only the individual skill parameter is dropped). This kept
+1,657 individually-modelled players and made the difference between a sampler that saturated
+its tree depth and one that cruised.
+
+### Inference
+
+Two regimes were used deliberately. **ADVI** (mean-field variational inference) for
+iteration: minutes per fit, but it approximates the posterior with a factorised Gaussian and
+is known to underestimate uncertainty. **NUTS** for the final estimates — run through the
+`numpyro` backend on a Kaggle GPU, because the dominant cost is dense matrix–vector products
+($17{,}581 \times \sim 1{,}000$ per block per gradient), which is exactly the workload GPUs
+eat. The GPU run converged cleanly: $\hat R \le 1.02$ everywhere, bulk effective sample sizes
+in the hundreds to thousands, zero divergences.
+
+The ADVI-versus-NUTS comparison is itself a result worth reporting: the NUTS posterior scales
+came out at roughly **half** the ADVI values across every block, and intervals widened
+substantially. Every "finding" that looked crisp under ADVI had to be re-litigated under the
+real posterior — and, as the results section shows, most species-level findings did not
+survive. If you take one methodological message from this post: *do not publish
+variational intervals for hierarchical models without checking them against MCMC*.
+
+## Model 2: low-rank synergy — a factorisation machine inside the likelihood
+
+The additive model has a visible blind spot: it prices every Pokémon independently of its
+teammates. VGC players will tell you this is wrong — the game is built around cores, weather
+engines, Trick Room modes. The value of a redirection support depends on what it redirects
+*for*.
+
+The naive fix — a free interaction $\omega_{ss'}$ for every species pair — needs
+$\binom{219}{2} \approx 24{,}000$ parameters, most for pairs never observed together. The
+scalable fix is **low-rank**: give each species a latent vector $v_s \in \mathbb{R}^d$ (I
+used $d=4$) and let pairwise synergy be an inner product. The team-level synergy term is
+
+$$
+\psi(T) \;=\; \sum_{\{s,s'\} \subseteq T,\ s \ne s'} \langle v_s, v_{s'} \rangle ,
+$$
+
+which is precisely the second-order term of a **factorisation machine** (Rendle, 2010). Two
+properties make it attractive here. First, the closed form
+
+$$
+\psi(T) \;=\; \tfrac{1}{2}\Big( \big\lVert \textstyle\sum_{s \in T} v_s \big\rVert^2
+\;-\; \sum_{s \in T} \lVert v_s \rVert^2 \Big)
+$$
+
+computes it in $O(kd)$ instead of $O(k^2 d)$ — the squared sum contains all cross terms plus
+the diagonal, and subtracting the norms removes exactly the diagonal. Second, that same
+subtraction guarantees a species generates **no self-synergy**: solo value stays entirely in
+$\alpha_s$, and $\psi$ captures only what emerges from the *pairing*. The decomposition
+between main effect and interaction is clean by construction.
+
+One implementation consequence: $\psi$ is quadratic in the species counts, so
+$\psi(A) - \psi(B)$ does **not** reduce to a function of $x_A - x_B$. The synergy model needs
+per-side count matrices, not just their difference — the one place where the tidy
+"logistic regression on differences" picture breaks.
+
+The latent vectors get a deliberately tight prior ($\tau_{\text{syn}} \sim
+\text{HalfNormal}(0.2)$, non-centred): the quadratic term should only claim variance the
+additive part leaves on the table, and a loose prior here destabilised ADVI badly enough to
+produce NaN cascades before it was tightened.
+
+An interpretive note before reading any synergy output: inner products are invariant to
+rotations of the latent space, so **individual coordinates of $v_s$ mean nothing**. The
+identified quantities are the pairwise products $\langle v_s, v_{s'} \rangle$ and the total
+$\psi(T)$ — read those, never the axes.
+
+## Model 3: beyond linearity — a Siamese Set Transformer
+
+The factorisation machine is still a degree-2 polynomial in the features. If the metagame
+contains genuinely higher-order structure — a Pokémon whose value depends on the *joint*
+presence of two specific partners, mode-based teams whose strength is not any sum of pairs —
+neither Bayesian model can represent it. The third model asks the question directly: **does
+letting a neural network learn the strength function buy predictive accuracy?**
+
+The architecture is not a generic MLP, and the reasons why are the interesting part. Two
+structural facts about the problem dictate almost everything:
+
+**Antisymmetry** must survive. This is achieved with a **Siamese** design: one tower
+$f_\theta$ (shared weights) scores each team to a scalar, and the logit is the difference,
+
+$$
+\eta \;=\; f_\theta(A) - f_\theta(B) + c ,
+$$
+
+so $P(A>B) = 1 - P(B>A)$ holds by construction, exactly as in Bradley-Terry. A network that
+concatenated both teams and classified would have to *learn* antisymmetry from data, and
+would learn it imperfectly.
+
+**Double permutation invariance** must survive. The four moves of a Pokémon are an unordered
+set; the six Pokémon of a team are an unordered set. Flattening a team into a fixed-position
+vector would force the network to re-learn "Incineroar" separately for every slot — a
+catastrophic waste of 17k matches. The tower therefore reads, bottom to top:
+
+1. **Embeddings** for each categorical feature (species, move, ability, item, nature; $d=24$),
+   giving every symbol one shared learned vector regardless of position. This is the neural
+   analogue of the Bayesian coefficients — parameter sharing as statistical strength.
+2. **Mean-pooling over the four move embeddings** — a symmetric function, so move order is
+   irrelevant *by construction*, not by training.
+3. A **per-Pokémon MLP** ($5d \to h \to h$, $h=64$, shared across the six slots) fusing the
+   feature bundle non-linearly — an item's value may depend on the ability next to it.
+4. **Self-attention across the six Pokémon** (a small Transformer encoder, *no positional
+   encoding*). This is where synergy lives: each Pokémon's representation is updated as an
+   attention-weighted combination of its teammates,
+   $\text{Attn}(\Phi) = \text{softmax}(QK^\top/\sqrt{d_k})\,V$, so an Incineroar next to a
+   Trick Room setter is literally represented differently from an Incineroar on a hyper-offence
+   team. Omitting positional encodings keeps the map permutation-*equivariant*.
+5. **Mean-pooling over the six** (equivariant map followed by symmetric pool ⇒ invariant
+   function — the Deep Sets / Set Transformer recipe (Zaheer et al., 2017; Lee et al., 2019)), then a scalar
+   head.
+
+Training: binary cross-entropy, Adam with weight decay $10^{-4}$ (which is, read through a
+Bayesian lens, a Gaussian prior on the weights — the network's version of shrinkage),
+dropout, early stopping on validation log-loss, and free data augmentation by swapping A/B
+with flipped labels, which reinforces antisymmetry. The final model has **106,738
+parameters** — deliberately small, because with 17k matches and sparse features, capacity is
+the enemy. Uncertainty at inference time comes from **MC-dropout**: dropout stays active and
+each team is scored repeatedly, the spread standing in for a predictive interval.
+
+## Results
+
+Everything below is from the NUTS posteriors (4 chains × 800 draws, $\hat R \le 1.02$)
+unless labelled otherwise. Read every table **by interval, not by mean**: an effect whose
+90% interval crosses zero is not established by this data.
+
+### The headline: the pilot dwarfs the team sheet
+
+The posterior block scales, additive model:
+
+| Block | $\tau$ (posterior mean) | interpretation |
+|---|---|---|
+| **player** | **0.550** | dominant, and precisely estimated (0.50–0.60) |
+| ability | 0.107 | |
+| item | 0.102 | |
+| species | 0.096 | |
+| moves | 0.077 | |
+| nature | 0.058 | smallest |
+
+Player skill carries roughly **five times** the dispersion of any team feature. The three
+leading team blocks — ability, item, species — have almost completely overlapping intervals
+and should be read as *statistically indistinguishable from each other*; only their
+collective gap to the player term is unambiguous.
+
+Put plainly: in online Regulation M-B tournaments, **who is playing predicts outcomes far
+better than what they are playing**. Team choice matters — the team blocks are not zero —
+but it is a second-order effect next to the pilot.
+
+One honest caveat before this becomes a slogan. Player skill and team strength separate only
+through the player × team crossing in the data. A pilot who always brings the same list makes
+the two partially collinear, and some team strength can hide inside $\lambda$. The magnitude
+of the gap makes the qualitative conclusion robust; the exact ratio should not be quoted as a
+causal decomposition.
+
+### No single Pokémon is a statistically established "best pick"
+
+This is the result that changed most between ADVI and NUTS, and the one I find most
+interesting. Under the full posterior, **zero of 219 species have an effect whose interval
+clears zero**. The top of the table:
+
+| Species | mean | 5%–95% |
+|---|---|---|
+| Kangaskhan | 0.107 | −0.026 – 0.266 |
+| Archaludon | 0.102 | −0.024 – 0.248 |
+| Eternal Flower Floette | 0.100 | −0.019 – 0.232 |
+| Charizard | 0.096 | −0.017 – 0.218 |
+| Froslass | 0.094 | −0.032 – 0.238 |
+
+Under ADVI's too-narrow intervals, Charizard and Floette had looked like solid positive
+effects. The real posterior says: plausible, not established. Given the player result above,
+this is coherent rather than disappointing — once pilot skill absorbs its share of the
+variance, the marginal effect of *one species slot out of six* is simply small relative to
+what 17k noisy Bernoulli outcomes can pin down. The data supports a metagame reading in which
+**no single species is an auto-win button**; value lives in whole configurations and in the
+hands holding them.
+
+### Where the signal *is*: moves, items, natures
+
+Interestingly, identifiability improves as we move from "which Pokémon" to "which choices".
+**Twelve moves** clear zero, and their identity sketches a coherent picture of what wins in
+M-B — control, positioning and utility over raw damage:
+
+| Move | mean | 5%–95% |
+|---|---|---|
+| Encore | 0.121 | 0.053 – 0.190 |
+| Weather Ball | 0.115 | 0.043 – 0.189 |
+| Quick Guard | 0.112 | 0.013 – 0.220 |
+| Swords Dance | 0.107 | 0.031 – 0.185 |
+| Stomping Tantrum | 0.100 | 0.033 – 0.167 |
+| Thunderbolt | 0.082 | 0.017 – 0.150 |
+
+(Also robust: Low Kick, Protect, Life Dew, Liquidation, Ice Beam, Thunder.) Encore leading
+the format is a very "doubles" result: tempo denial beats power. Weather Ball's position
+points at active weather engines.
+
+**Seven items** clear zero, led by **Venusaurite** (0.143, 0.018–0.282) — Mega Venusaur's
+stone, and the single largest robust coefficient among all features — with Light Clay
+(screens support) and Passho Berry alongside. The Mega Stones' presence at the top of the
+item table confirms the format-defining role of Mega Evolution; Floettite actually has the
+highest posterior *mean* (0.143) but its interval grazes zero (−0.004), a reminder that this
+format's most hyped legendary is popular *and* good but not unambiguously so once uncertainty
+is honest. `No Item` also comes out robustly non-zero — running itemless is a real strategic
+signal, not a data hole.
+
+Among **natures**, three are robust — Calm (0.091), Modest (0.064), Bold (0.055) — all
+special-side or defensive, consistent with reading nature as a proxy for the build archetype
+the EV spread (deliberately excluded from the model) would have revealed.
+
+Two **abilities** clear zero: Unnerve and Swift Swim. The ability block suffers from an
+extra handicap — roughly 8,500 slots have the ability missing in the source data, handled by
+partial pooling rather than row deletion, but inevitably widening those posteriors.
+
+### The strongest teams
+
+Team strength $s(T)$ — pilot excluded, so this answers *"how strong is the configuration,
+held constant who pilots it"* — for the 95 archetypes seen at least five times. The additive
+model's podium:
+
+| # | Team | n | $s(T)$ | 5%–95% |
+|---|---|---|---|---|
+| 1 | Sneasler / Blastoise / Kingambit / Incineroar / Delphox / Sinistcha | 7 | 2.05 | 1.69 – 2.41 |
+| 2 | Blastoise / Delphox / Sneasler / Incineroar / Sinistcha / Kingambit | 5 | 1.90 | 1.55 – 2.26 |
+| 3 | Delphox / Eternal Flower Floette / Sinistcha / Kingambit / Sneasler / Incineroar | 7 | 1.82 | 1.48 – 2.16 |
+| 4 | Froslass / Scovillain / Basculegion / Kingambit / Lycanroc-Dusk / Sneasler | 8 | 1.82 | 1.46 – 2.19 |
+| 5 | Sinistcha / Kingambit / Sneasler / E. F. Floette / Delphox / Incineroar | 8 | 1.81 | 1.48 – 2.15 |
+
+The top of the table is essentially one archetype in variations: a
+**Sneasler / Kingambit / Incineroar / Sinistcha core** flexing its last two slots (Blastoise
++ Delphox, or Floette + Delphox). Rows 1 and 2 share their entire six-species line-up and
+differ only in sets, and the model prices that set difference at ~0.15 log-odds — a nice
+illustration of why modelling below the species level was worth the trouble. The synergy
+model reproduces this ranking almost unchanged (same top three, slightly higher strengths),
+which is itself informative: pairwise synergy refines, it does not overturn.
+
+A head-to-head worth quoting for calibration: the model gives team 1 a
+**54.7% [47.6%, 62.2%]** probability against team 2 at equal pilot skill. Even the top team's
+edge over its nearest rival brushes a coin flip. Nobody should read this table as a tier
+list with cliffs in it.
+
+### Synergy: real, small, and concentrated
+
+Out of 1,936 species pairs observed together at least five times, exactly **four** have
+robustly positive synergy:
+
+| Pair | n (co-occurrences) | $\langle v_s, v_{s'} \rangle$ | 5%–95% |
+|---|---|---|---|
+| Archaludon + Grimmsnarl | 495 | 0.095 | 0.003 – 0.206 |
+| **Kingambit + Sneasler** | 567 | 0.091 | 0.019 – 0.172 |
+| Kingambit + Sinistcha | 388 | 0.089 | 0.019 – 0.170 |
+| E. F. Floette + Kingambit | 571 | 0.080 | 0.007 – 0.162 |
+
+The list reads like a who's-who of known cores: Archaludon under Grimmsnarl screens (Light
+Clay's robust item effect is the same engine seen from another block), and Kingambit
+appearing in three of the four pairs — the model has learned, from win/loss data alone, that
+Kingambit is the glue of the format's dominant archetype. No negative pair reaches
+robustness, though Kingambit's *anti*-synergies with Farigiraf, Archaludon and Grimmsnarl
+hover near the boundary — plausibly the model noticing role redundancy.
+
+The fact that the robust synergy pairs sit exactly inside the top teams is the kind of
+internal consistency you hope for but should still check: the FM term and the team ranking
+were estimated jointly, but nothing forced the *interpretable* pairs to align with the
+*empirically successful* rosters.
+
+### Did non-linearity help? No — and that is a result
+
+The comparison that motivated the whole third model:
+
+| Model | held-out log-loss | held-out accuracy |
+|---|---|---|
+| Coin flip | 0.6931 | 0.500 |
+| Bayesian additive (ADVI refit) | 0.6618 | 0.614 |
+| **Bayesian additive (NUTS refit)** | **0.6584** | 0.601 |
+| Set Transformer | 0.6692 | ~0.61 |
+
+The network does **not** beat the linear-in-features Bayesian model. The rigorous
+comparison — a full NUTS refit on an 85/15 training split, scored on the 2,638 held-out
+matches — puts the Bayesian model at **0.6584**, the best number of the three, with the
+Set Transformer at 0.6692. Proper Hamiltonian sampling therefore does not only produce honest
+intervals; it also predicts slightly better than its variational approximation. (One honesty
+note: the neural split is equal in size but not identical row-for-row to the Bayesian one —
+different RNGs — so the neural gap should be read as "clearly not better" rather than as a
+defeat by exactly that margin.)
+
+I want to resist the temptation to spin this. The Set Transformer was the right architecture
+for the hypothesis — attention over the six-slot set is precisely how you would let
+higher-order synergy express itself — and it was trained with the right regularisation for
+the data scale. It found nothing the additive model plus degree-2 synergy had missed. The
+conclusion I actually draw is a statement about the *game*, conditional on this data: at
+17k matches, whatever higher-order interaction structure exists in the M-B metagame is not
+strong enough to be learnable past the noise floor set by unobserved in-battle decisions and
+the pilot effect. The regularised Bayesian model is not a baseline the deep model failed to
+beat; it is the right-sized model for the problem.
+
+The neural model's team ranking is worth a glance for what it *disagrees* about: its top team
+(Incineroar / Gardevoir / Talonflame / Tsareena / Maushold / Basculegion) is nowhere near the
+Bayesian podium. With near-identical held-out loss, disagreements of this kind are mostly a
+display of estimation variance between two models fitting the same weak signal — a caution
+against over-reading *any* single model's team list.
+
+### How predictable is a VGC match, anyway?
+
+It is worth dwelling on the absolute numbers. The best model reaches log-loss 0.658 against
+a 0.693 coin flip and roughly 60% accuracy. That is a genuine edge — over thousands of matches it is
+decisive information — but it means the single match remains close to a fair coin even when
+you know both full teamlists *and* the pilots' historical strength. The unmodelled residue is
+the game itself: open team sheet reading, leads, in-battle decisions, and honest-to-goodness
+RNG. Any service claiming to predict individual VGC matches with high confidence is selling
+something the data says does not exist.
+
+## What this means for Worlds — and why it is already going stale
+
+Pulling the threads together for the question we started with:
+
+- **The archetype entering as the favourite** is the Sneasler / Kingambit / Incineroar /
+  Sinistcha core with flexible fifth and sixth slots — top of both Bayesian rankings, glued
+  together by three of the four robustly positive synergy pairs in the entire format.
+- **The robust individual signals** are choices, not species: Encore, Weather Ball, Quick
+  Guard, Swords Dance among moves; Venusaurite, Light Clay, Passho Berry among items; calm,
+  special-leaning natures. No single Pokémon is a statistically established best pick.
+- **The biggest single predictor of who wins is who is playing.** Team choice is worth
+  perhaps a fifth of the pilot, by posterior dispersion. Practice beats teambuilding — or
+  more precisely, teambuilding differences among competent players are worth less than skill
+  differences among them.
+
+And the necessary disclaimer, stated as a modelling assumption rather than a shrug: this
+entire analysis is a **snapshot under stationarity**. The model assumes the win-generating
+process is constant within the Regulation M-B window, and the metagame demonstrably is not —
+it adapts weekly, and it will adapt *to* whatever is currently winning, Sneasler cores
+included. There is also a population gap: this is online Limitless data, and the Worlds field
+(invite-only, in-person, best-of-three throughout) is a different distribution. The pipeline
+is built to be re-run — new tournaments in, canonicalisation, refit — and the honest way to
+use this model in August is on data pulled in August. Planned extensions, roughly in order:
+exponential time-decay of match weights (a power-posterior compromise), a row-for-row shared
+validation split across all three models (the NUTS and neural numbers above use equal-sized
+but independently drawn splits), extending the factorisation to move-and-item vectors, and a
+low-rank antisymmetric matchup term for the rock-paper-scissors structure a single strength
+scale cannot express.
+
+## Reproducibility
+
+Everything — collection client, canonicaliser, design matrices, all three models, and the
+analysis notebooks — is at
+[github.com/mat126/bayesian-ranking-vgc](https://github.com/mat126/bayesian-ranking-vgc).
+The stack: PyMC with the numpyro/JAX backend on GPU for sampling (nutpie on CPU for
+iteration), PyTorch for the Set Transformer, PokéAPI's multilingual tables plus rapidfuzz for
+cleaning. Posteriors are ~130–175 MB NetCDF files, regenerable from the pipeline; the run
+configuration travels inside a tagged artifacts JSON precisely so that no two posteriors can
+be compared without knowing they were estimated under the same thresholds.
+
+*References in text: Bradley & Terry (1952), Biometrika; Rendle (2010), ICDM (factorisation
+machines); Zaheer et al. (2017), NeurIPS (Deep Sets); Lee et al. (2019), ICML (Set
+Transformer); Betancourt & Girolami (2015) (hierarchical funnel geometries).*
