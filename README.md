@@ -1,296 +1,215 @@
-# Ranking VGC — Bradley-Terry gerarchico bayesiano
+# Bayesian Ranking for Pokémon VGC
 
-Modello di ranking per il metagame competitivo Pokémon VGC, costruito per stimare quali
-Pokémon e quali squadre arrivano da favoriti ai Campionati Mondiali 2026 (Pokémon Champions,
-Regulation Set M-B).
+A hierarchical Bayesian Bradley-Terry model that estimates which Pokémon and which teams enter
+the 2026 World Championships (Pokémon Champions, Regulation Set M-B) as favourites, plus a
+low-rank synergy variant and a neural Set Transformer for comparison.
 
-La forza di una squadra non viene stimata come parametro libero, cosa impossibile data la
-combinatoria, ma **decomposta negli effetti delle sue componenti**: specie, mosse, abilità,
-strumenti e nature, più un effetto di abilità del giocatore. L'inferenza è bayesiana
-gerarchica, con partial pooling che regolarizza i livelli rari e intervalli di credibilità
-su ogni stima.
+Team strength is not a free parameter, which the combinatorics make impossible, but
+**decomposed into the effects of its components**: species, moves, abilities, items and
+natures, plus a player skill effect. Inference is hierarchical Bayesian, with partial pooling
+regularising rare levels and credible intervals on every estimate. All headline numbers below
+come from NUTS (Hamiltonian Monte Carlo); read them **by interval, not by mean**.
 
-> **Stato attuale.** I risultati riportati sotto provengono da inferenza variazionale (ADVI),
-> veloce ma che approssima il posterior con una gaussiana fattorizzata e tende a
-> **sottostimare l'incertezza**. Gli intervalli vanno letti come ottimistici. La stima
-> definitiva con NUTS è in corso: vedi [Roadmap](#roadmap).
+## Key results
 
----
+Dataset: **17,581 matches** from Limitless tournaments in Regulation M-B, complete teamlists on
+both sides, 3,878 distinct players, 5,393 unique teams (only 95 seen five or more times — which
+is exactly why feature decomposition is necessary rather than a refinement).
 
-## Risultati principali
+### The pilot dominates the team sheet
 
-Dataset: **17.581 match** da tornei Limitless in Regulation M-B, con teamlist completa per
-entrambi i giocatori, 3.878 giocatori distinti, 7.025 righe squadra-torneo.
+Posterior block scales (`tau`), additive model:
 
-### Il pilota conta più della squadra
-
-La scala `tau` di ciascun blocco misura quanto quella dimensione muove la forza. Il risultato
-è netto e va letto prima di tutto il resto:
-
-| Blocco | tau (media) | 5%–95% |
+| Block | tau (mean) | interpretation |
 |---|---|---|
-| **giocatore** | **1.074** | 1.052 – 1.096 |
-| strumento | 0.213 | 0.192 – 0.235 |
-| specie | 0.201 | 0.184 – 0.219 |
-| abilità | 0.194 | 0.176 – 0.213 |
-| mosse | 0.187 | 0.175 – 0.199 |
-| natura | 0.121 | 0.088 – 0.158 |
+| **player** | **0.550** [0.50, 0.60] | dominant and precisely estimated |
+| ability | 0.107 | |
+| item | 0.102 | team-feature blocks, statistically |
+| species | 0.096 | indistinguishable from one another |
+| moves | 0.077 | |
+| nature | 0.058 | smallest |
 
-L'abilità del pilota ha dispersione **circa cinque volte** superiore a qualunque
-caratteristica della squadra. Detto in modo diretto: in questi dati chi gioca conta molto più
-di cosa gioca. Fra le feature di squadra, strumento e specie guidano, la natura è marginale.
+Player skill carries roughly **five times** the dispersion of any team feature. Who plays
+predicts outcomes far more than what they play. The caveat: pilot skill and team strength
+separate only through the player × team crossing in the data, so the exact ratio is not a clean
+causal decomposition, though the size of the gap makes the qualitative conclusion robust. At the
+individual level, **141 of 1,657 modelled players** have a skill effect whose interval clears
+zero — while **zero of 219 species** do (see below).
 
-**Caveat di identificabilità, importante.** L'effetto pilota e la forza della squadra si
-separano solo grazie all'incrocio giocatori × squadre nei dati. Un giocatore che porta sempre
-la stessa lista rende le due quantità parzialmente collineari, e parte di quel `tau = 1.07`
-può essere forza-squadra assorbita dal termine del pilota. La gerarchia dei blocchi va quindi
-letta come indicativa, non come stima causale pulita.
+### No single Pokémon is a robust best pick
 
-### Capacità predittiva (held-out)
+Under the full posterior, **not one of 219 species** has an effect whose 90% interval clears
+zero. The leaders (Kangaskhan 0.107, Archaludon 0.102, Eternal Flower Floette 0.100, Charizard
+0.096) are plausible but not established. This overturns what ADVI had suggested: variational
+inference underestimated the uncertainty, and the honest NUTS posterior says the marginal effect
+of one species slot out of six is simply small next to the pilot and the noise floor. No species
+is an auto-win button; value lives in whole configurations.
 
-| Metrica | Modello | Baseline |
+### Where the signal is: moves, items, natures
+
+Identifiability improves from "which Pokémon" to "which choices". **Twelve moves** clear zero,
+led by Encore (0.121), Weather Ball (0.115), Quick Guard (0.112) and Swords Dance (0.107) —
+control and utility over raw power. **Seven items** clear zero, led by Venusaurite (0.143), with
+Mega Stones dominating the block as expected in a Mega-Evolution format without Terastallization.
+Three natures are robust (Calm, Modest, Bold), all defensive or special-leaning. Two abilities
+(Unnerve, Swift Swim).
+
+### Strongest teams
+
+Team strength `s(T)` (pilot excluded) for the 95 archetypes seen at least five times is led by a
+**Sneasler / Kingambit / Incineroar / Sinistcha core** in several fifth/sixth-slot variations.
+The synergy model reproduces the same podium. The head-to-head between the top two teams is
+**54.7% [47.6%, 62.2%]** at equal pilot skill — a real edge that brushes a coin flip. No cliffs.
+
+### Synergy is real, small, and concentrated
+
+Of 1,936 co-occurring species pairs, exactly **four** have robustly positive synergy:
+Archaludon + Grimmsnarl (0.095), Kingambit + Sneasler (0.091), Kingambit + Sinistcha (0.089),
+Eternal Flower Floette + Kingambit (0.080). Kingambit anchors three of the four — the model
+learned the format's dominant core from win/loss data alone.
+
+### Did non-linearity help? No — and that is a result
+
+Held-out log-loss, the metric that decides which model predicts best:
+
+| Model | held-out log-loss | held-out accuracy |
 |---|---|---|
-| log-loss (test) | **0.6618** | 0.6931 (coin flip) |
-| accuracy (test) | **0.6141** | 0.5 |
+| Coin flip | 0.6931 | 0.500 |
+| Bayesian additive (ADVI) | 0.6618 | 0.614 |
+| **Bayesian additive (NUTS)** | **0.6584** | 0.601 |
+| Neural Set Transformer | 0.6692 | ~0.61 |
 
-Il segnale c'è ed è reale, ma modesto: il modello batte il caso in modo consistente senza
-avvicinarsi a una previsione affidabile del singolo match. È un esito atteso in un gioco con
-forte componente stocastica e decisioni in-battle non osservate. Nota inoltre che questa
-performance **include** l'effetto pilota, che secondo le `tau` è il predittore dominante:
-la quota attribuibile alla sola composizione della squadra è di conseguenza più bassa.
+The rigorous NUTS refit gives the best held-out log-loss (0.6584), and the neural network does
+**not** beat it. The Set Transformer was the right architecture to let higher-order synergy
+express itself, trained with the right regularisation for the data scale, and it found nothing
+the additive model plus degree-2 synergy had missed. At 17k matches, whatever higher-order
+structure exists in the metagame is not learnable past the noise floor set by unobserved
+in-battle decisions and the pilot effect. The regularised Bayesian model is not a baseline the
+deep model failed to beat; it is the right-sized model for the problem.
 
-### Ranking dei Pokémon
+Even the best model sits only modestly below chance: a single VGC match stays close to a coin
+flip even given both full teamlists and pilot history. The unmodelled residue is the game itself
+— team preview reading, in-battle decisions, and RNG.
 
-Effetto specie `beta_species`, cioè il contributo alla forza a parità di tutto il resto.
-La classifica va letta **per intervallo, non per media**: diverse specie in cima hanno il
-5° percentile sotto zero, quindi la loro posizione è guidata dal rumore. Le stime robuste
-sono quelle con intervallo interamente positivo.
+Figures in [`figures/`](figures/), tables in [`results/`](results/), full write-up in the
+[blog post](vgc_ranking_blog.qmd).
 
-| Specie | media | 5%–95% | robusta |
-|---|---|---|---|
-| Armarouge | 0.255 | −0.007 – 0.536 | no |
-| Gallade | 0.216 | 0.013 – 0.420 | al limite |
-| **Charizard** | 0.202 | 0.103 – 0.294 | **sì** |
-| Gardevoir | 0.199 | 0.043 – 0.362 | sì |
-| Froslass | 0.199 | 0.081 – 0.327 | sì |
-| Wash Rotom | 0.174 | 0.051 – 0.297 | sì |
-| Klefki | 0.173 | −0.128 – 0.475 | no |
-| **Eternal Flower Floette** | 0.162 | 0.060 – 0.251 | **sì** |
-| Whimsicott | 0.158 | 0.056 – 0.260 | sì |
-
-Charizard ed Eternal Flower Floette sono le stime più affidabili del gruppo di testa, con
-intervalli stretti e interamente positivi.
-
-### Effetti di set
-
-Le Mega Stone dominano la classifica degli strumenti, come atteso in un formato con Mega
-Evoluzioni e senza Terastallizzazione: **Venusaurite** (0.368, il valore più alto in assoluto
-fra tutte le feature), Floettite (0.206), Raichunite Y (0.197), Dragoninite (0.187).
-
-Fra le mosse emergono controllo e utility più che potenza bruta: Quick Guard (0.251),
-Perish Song (0.237), Snarl (0.229), Encore (0.202), Weather Ball (0.202).
-
-Fra le nature spicca **Calm** (0.184), l'unica nettamente separata da zero, coerente con la
-lettura della natura come proxy dell'archetipo di build difensivo-speciale.
-
-### Squadre favorite
-
-Su **5.393 squadre uniche** solo **95** compaiono almeno 5 volte: conferma empirica che
-stimare una forza libera per squadra sarebbe stato impossibile, e che la decomposizione in
-feature è necessaria e non una raffinatezza. Le prime posizioni sono occupate da nuclei
-Sneasler / Kingambit / Incineroar / Sinistcha e da varianti Charizard / Aerodactyl / Farigiraf.
-
-Testa a testa fra le prime due, a parità di pilota: **P(A batte B) = 0.547 [0.476, 0.622]**,
-cioè un vantaggio reale ma non decisivo, con intervallo che sfiora il pareggio.
-
-Figure in [`figures/`](figures/), tabelle complete in [`results/`](results/).
-
----
-
-## Struttura del repository
+## Repository layout
 
 ```
-ranking-vgc/
+bayesian-ranking-vgc/
 ├── README.md
-├── environment.yml           ambiente conda riproducibile
+├── environment.yml           reproducible conda environment
 ├── .gitignore
-├── src/                      tutto il codice, importabile fra moduli
-│   ├── limitless_vgc.py      raccolta match dall'API Limitless
-│   ├── pokepaste.py          parser pokepaste (fallback per fonti non-API)
-│   ├── inspect_standings.py  diagnostica struttura API
-│   ├── showdown_replays.py   fonte secondaria (ladder, solo specie)
-│   ├── canonicalize.py       pulizia campi (multilingua, refusi, nulli)
-│   ├── design_matrix.py      matrici conteggio-differenza e conteggi per lato
-│   ├── bt_bayes.py           modello bayesiano gerarchico (PyMC)
-│   ├── neural_bt.py          architettura Set Transformer siamese
-│   ├── neural_data.py        encoding in tensori, vocabolari, DataLoader
-│   ├── neural_train.py       training con early stopping
-│   └── neural_eval.py        metriche held-out, ranking, MC-dropout
-├── notebooks/
-│   └── analisi_vgc.ipynb     analisi e figure dal posterior salvato
-├── docs/
-│   └── architettura_neural_bt.svg
-├── figures/                  grafici versionati
-├── results/                  CSV dei ranking versionati
-├── data/                     [non versionato] rigenerabile dalla pipeline
-└── models/                   [non versionato] posterior e checkpoint
+├── vgc_ranking_blog.qmd       long-form technical write-up
+├── src/                       all code, flat so modules import each other
+├── notebooks/                 analysis, comparison, and Kaggle GPU notebooks
+├── docs/                      architecture diagram
+├── figures/                   versioned plots
+├── results/                   versioned ranking tables
+├── data/                      [not versioned] regenerable from the pipeline
+└── models/                    [not versioned] posteriors and checkpoints
 ```
 
-Gli script stanno tutti in `src/` piatto, così gli import fra moduli funzionano senza
-pacchetti né path hack: lanciandoli come `python src/nome.py` dalla radice, Python mette
-`src/` in testa al path e i percorsi dati relativi si risolvono dalla radice del progetto.
-
----
+Each directory carries its own README. Scripts live in a flat `src/` so cross-module imports
+work without packaging: running `python src/name.py` from the root puts `src/` at the head of
+the path while relative data paths resolve from the root.
 
 ## Pipeline
-
-### 1. Ambiente
 
 ```bash
 conda env create -f environment.yml
 conda activate vgc
-```
 
-### 2. Raccolta dati
-
-Fonte primaria: **API pubblica Limitless**, senza chiave. Le usage stats di Victory Road o
-Pikalytics non bastano: per un Bradley-Terry servono esiti testa a testa con entrambe le
-squadre note. L'endpoint `standings` fornisce le teamlist già strutturate e `pairings` i
-vincitori; il join dà (squadra A, squadra B, esito).
-
-```bash
-python src/limitless_vgc.py --list-formats
+# 1. collect (public Limitless API, no key)
 python src/limitless_vgc.py --format <FORMAT_ID_REG_M_B> --min-players 30 --max-tournaments 300
-```
 
-Produce `data/matches.jsonl` e `data/teams.jsonl`.
-
-### 3. Pulizia
-
-I campi testuali arrivano sporchi perché ogni giocatore invia la lista nella lingua del
-proprio gioco, con refusi e maiuscole incoerenti. Il vocabolario però è chiuso e noto, quindi
-la canonicalizzazione è quasi interamente automatica: slug, aggancio esatto alle tabelle
-multilingua PokéAPI, fuzzy match sui refusi, override manuali per il residuo.
-
-```bash
+# 2. clean (multilingual canonicalisation)
 python src/canonicalize.py data/matches.jsonl data/matches_clean.jsonl --fuzz 85
-```
 
-Le Mega Stone introdotte da Champions e assenti da PokéAPI (Floettite, Raichunite,
-Staraptite e altre 49) vengono riconosciute e **mantenute** col nome grezzo, che è pulito e
-consistente: sono feature ad alto valore, non rumore.
+# 3. fit — additive and synergy, definitive NUTS estimates
+python src/bt_bayes.py --matches data/matches_clean.jsonl --method nuts --sampler nutpie \
+    --draws 800 --tune 500 --chains 2 --min-freq 5 --min-player-matches 8 --target-accept 0.8
+python src/bt_bayes.py --matches data/matches_clean.jsonl --method nuts --synergy-dim 4 --tag nuts_syn4
 
-### 4. Modello bayesiano
-
-```bash
-# veloce, per iterare
-python src/bt_bayes.py --matches data/matches_clean.jsonl --method advi --draws 800 --min-freq 5
-
-# con sinergia specie×specie a rango basso
-python src/bt_bayes.py --matches data/matches_clean.jsonl --method advi --draws 800 --min-freq 5 --synergy-dim 4
-
-# stime definitive (lento)
-python src/bt_bayes.py --matches data/matches_clean.jsonl --method nuts --draws 800 --min-freq 5
-```
-
-Utile in fase di test: `--limit N` campiona N match e riduce drasticamente i tempi di
-compilazione del grafo.
-
-### 5. Analisi
-
-```bash
-jupyter lab notebooks/analisi_vgc.ipynb
-```
-
-Il notebook legge il posterior salvato e produce classifiche, figure e la validazione
-held-out. Va eseguito con la radice del progetto come working directory.
-
-### 6. Modello neurale (alternativo)
-
-```bash
-python src/neural_train.py --matches data/matches_clean.jsonl --epochs 60
+# 4. neural alternative
+python src/neural_train.py --matches data/matches_clean.jsonl --epochs 80
 python src/neural_eval.py --ckpt models/neural_ckpt.pt --matches data/matches_clean.jsonl --teams data/teams.jsonl
 ```
 
----
+GPU sampling (an order of magnitude faster on this workload) runs through the Kaggle notebooks
+in [`notebooks/`](notebooks/), also published on
+[kaggle.com/mat126](https://www.kaggle.com/mat126). See [`src/README.md`](src/README.md) for the
+full flag reference and the performance-tuning history.
 
-## Note di modello
+## Modelling notes
 
-**Verosimiglianza.** Bradley-Terry Bernoulli: `logit P(A batte B) = s(A) − s(B)`, con la
-struttura a differenza che impone l'antisimmetria per costruzione. Un'intercetta di lato
-assorbe l'asimmetria sistematica osservata (frequenza di vittoria di player1 pari a 0.513).
+**Likelihood.** Bradley-Terry Bernoulli: `logit P(A beats B) = s(A) − s(B)`, difference
+structure enforcing antisymmetry. A side intercept absorbs the player1 advantage (51.3%).
 
-**Forza strutturata.** `s(T)` è somma dei contributi dei sei Pokémon, ciascuno somma degli
-effetti delle sue feature. Essendo lineare nei conteggi, la differenza di forze diventa il
-prodotto dei coefficienti per la differenza dei vettori-conteggio delle due squadre: da qui
-la design matrix.
+**Structured strength.** `s(T)` sums six Pokémon contributions, each a sum of feature effects.
+Being linear in counts, the strength difference is the coefficients times the difference of the
+teams' count vectors — hence the design matrix.
 
-**Identificabilità.** Ogni squadra ha esattamente sei Pokémon, quindi una costante additiva
-per blocco si cancella nella differenza. Il vincolo somma-zero (`ZeroSumNormal`) rimuove il
-grado di libertà spurio, ed essendo già in parametrizzazione non centrata evita la geometria
-a imbuto tipica dei modelli gerarchici.
+**Identifiability and geometry.** Six species per team make an additive per-block constant
+cancel; `ZeroSumNormal` removes it. That constraint is non-centred only with respect to itself,
+**not** with respect to the hierarchical scale, so the model multiplies a standardised variable
+by `tau` explicitly — without this, the funnel froze chains at step size 0.001.
 
-**Osservazione parziale.** Le abilità mancano in circa 8.500 slot. Il partial pooling gestisce
-il caso senza scartare righe: le feature non osservate marginalizzano al prior e il match
-contribuisce comunque tramite gli altri blocchi.
+**Conditioning.** Players below eight matches are pooled to a shared zero effect (their matches
+stay in the likelihood; only the individual skill parameter is dropped). This kept 1,657 players
+and turned a sampler saturating its tree depth into one that runs.
 
-**Sinergia.** Termine opzionale a rango basso (Factorization Machine): un vettore latente per
-specie, sinergia di coppia come prodotto scalare, calcolata in forma chiusa. Essendo
-quadratica richiede i conteggi **per lato** e non la sola differenza. Numericamente delicata
-in ADVI, stabilizzata con prior stretto, clipping del predittore e learning rate ridotto.
+**Synergy.** Optional low-rank factorisation machine: one latent vector per species, pairwise
+synergy as an inner product in closed form, with no self-synergy by construction.
 
-**Scelta delle feature.** Gli spread EV/IV sono esclusi per disponibilità e dimensionalità.
-Il costo è varianza, non distorsione, dato che l'obiettivo è il ranking e non l'effetto
-causale dello spread. La natura funge da proxy parziale dell'archetipo di build.
+**Neural model.** Siamese Set Transformer: shared tower scoring each team, difference giving the
+logit (antisymmetry by construction); double permutation invariance (moves, then Pokémon) via
+mean-pooling and self-attention with no positional encoding. 106,738 parameters, deliberately
+small.
 
----
+## Known limitations
 
-## Limiti noti
-
-**Transitività stocastica.** Una scala di forza unidimensionale non può rappresentare i
-triangoli di matchup, che nel VGC esistono. Se la validazione mostrasse errore concentrato su
-accoppiamenti specifici servirebbe un termine di matchup antisimmetrico a rango basso.
-
-**Confondimento pilota.** Vedi il caveat sopra. È il limite più rilevante per l'interpretazione
-dei risultati.
-
-**Stazionarietà.** Il modello è una fotografia della finestra M-B. Il meta si sposta di
-settimana in settimana e i risultati vanno rigenerati man mano che escono nuovi tornei.
-
-**Popolazione.** I dati provengono da tornei online Limitless, che non coincidono con il
-circuito ufficiale dal vivo. La distribuzione ai Mondiali potrebbe differire.
-
----
+Stochastic transitivity (a 1-D strength scale cannot represent matchup triangles); player
+confounding (the main interpretive caveat); non-stationarity (the metagame shifts weekly);
+population (online Limitless data differs from the in-person Worlds field).
 
 ## Roadmap
 
-- [ ] **Stima definitiva con NUTS.** L'ADVI sottostima l'incertezza, quindi tutti gli
-      intervalli riportati sopra sono ottimistici. Il campionamento Hamiltoniano darà
-      intervalli credibili affidabili. Costo elevato: il termine di sinergia rende la
-      geometria difficile e il campionamento molto lento, quindi la prima passata è prevista
-      senza sinergia.
-- [ ] **Confronto formale additivo contro sinergia** sul log-loss held-out, stesso split,
-      per stabilire se la sinergia di coppia porta segnale reale o se il metagame è dominato
-      dagli effetti principali.
-- [ ] **Modello neurale.** Rete siamese con self-attention sui sei Pokémon (Set Transformer):
-      la sinergia emerge dall'attenzione invece che da un prodotto scalare a grado 2, e
-      cattura interazioni di ordine superiore. Architettura e pipeline già scritte, da
-      addestrare e confrontare. Diagramma in [`docs/`](docs/architettura_neural_bt.svg).
-      Aspettativa onesta: con 17k match e feature sparse il bayesiano regolarizzato è
-      competitivo, e la rete vince solo se l'attenzione cattura struttura che la
-      fattorizzazione a grado 2 non vede.
-- [ ] **Decadimento temporale** dei pesi per seguire lo spostamento del meta verso agosto.
-- [ ] **Estensione della sinergia** a mosse e strumenti, non solo specie.
-- [ ] **Aggiornamento continuo** del dataset fino ai Mondiali (28–30 agosto 2026).
+- [x] Definitive NUTS estimation (GPU, numpyro)
+- [x] Additive vs synergy comparison
+- [x] Neural Set Transformer trained and compared
+- [x] Rigorous NUTS held-out validation (0.6584)
+- [ ] Fully aligned three-model comparison on one shared split (row-for-row)
+- [ ] Temporal decay of match weights toward August
+- [ ] Synergy extension to moves and items
+- [ ] Continuous dataset updates through Worlds (28–30 August 2026)
 
----
+## Links and data sources
 
-## Fonti dati
+- GPU notebooks on Kaggle: [kaggle.com/mat126](https://www.kaggle.com/mat126)
+- [Limitless](https://play.limitlesstcg.com) — public API, primary match source
+- [PokéAPI](https://github.com/PokeAPI/pokeapi) — multilingual name tables for canonicalisation
+- [Pokémon Showdown](https://replay.pokemonshowdown.com) — optional secondary source
 
-- [Limitless](https://play.limitlesstcg.com) — API pubblica, fonte primaria dei match
-- [PokéAPI](https://github.com/PokeAPI/pokeapi) — tabelle nomi multilingua per la canonicalizzazione
-- [Pokémon Showdown](https://replay.pokemonshowdown.com) — fonte secondaria opzionale (ladder)
+## Licence
 
-## Licenza
+Released under the MIT Licence. You are free to use, copy, modify and distribute this code,
+including for commercial purposes, provided the copyright notice and licence text are retained.
+The software is provided "as is", without warranty of any kind. See [`LICENSE`](LICENSE) for the
+full text.
 
-MIT
+The MIT Licence covers the code in this repository. It does not extend to third-party data:
+match data comes from the Limitless API and reference tables from PokéAPI, each under its own
+terms, and Pokémon names and related trademarks belong to Nintendo, Game Freak and The Pokémon
+Company. This is an independent, non-commercial research project with no affiliation to or
+endorsement by those parties.
+
+## Use of AI assistance
+
+Parts of this project were developed with the help of an AI coding assistant, used for
+scaffolding, refactoring, debugging, and drafting documentation. Every design decision — the
+model structure, the choice of priors, the handling of identifiability and sampler geometry,
+the interpretation of results — was made, reviewed and validated by me. AI-assisted code was
+read, tested and corrected before being committed; it was a tool for moving faster, not a
+substitute for understanding. Any errors that remain are my own.

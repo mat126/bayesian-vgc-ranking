@@ -1,20 +1,20 @@
-# dati rigenerabili (tieni solo il README)
+# regenerable data (keep only the README)
 data/*
 !data/README.md
 pokeapi_csv/
 
-# artefatti pesanti dei modelli (troppo grandi per GitHub; tieni solo il README)
+# heavy model artifacts (too large for GitHub; keep only the README)
 models/*
 !models/README.md
 
-# cache python
+# python
 __pycache__/
 *.py[cod]
 .ipynb_checkpoints/
 .venv/
 env/
 
-# scarto / editor
+# scratch / editor
 controlli_dati.py
 struttura.txt
 _preview.png
