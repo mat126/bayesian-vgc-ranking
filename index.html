@@ -1,0 +1,995 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" lang="en" xml:lang="en"><head>
+
+<meta charset="utf-8">
+<meta name="generator" content="quarto-1.9.38">
+
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+
+<meta name="author" content="Matteo Morella">
+<meta name="dcterms.date" content="2026-07-25">
+
+<title>Who Enters Worlds as the Favourite? A Bayesian Ranking Model for Competitive Pokémon VGC</title>
+<style>
+/* Default styles provided by pandoc.
+** See https://pandoc.org/MANUAL.html#variables-for-html for config info.
+*/
+code{white-space: pre-wrap;}
+span.smallcaps{font-variant: small-caps;}
+div.columns{display: flex; gap: min(4vw, 1.5em);}
+div.column{flex: auto; overflow-x: auto;}
+div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+ul.task-list{list-style: none;}
+ul.task-list li input[type="checkbox"] {
+  width: 0.8em;
+  margin: 0 0.8em 0.2em -1em; /* quarto-specific, see https://github.com/quarto-dev/quarto-cli/issues/4556 */ 
+  vertical-align: middle;
+}
+</style>
+
+
+<script src="vgc_ranking_blog_files/libs/clipboard/clipboard.min.js"></script>
+<script src="vgc_ranking_blog_files/libs/quarto-html/quarto.js" type="module"></script>
+<script src="vgc_ranking_blog_files/libs/quarto-html/tabsets/tabsets.js" type="module"></script>
+<script src="vgc_ranking_blog_files/libs/quarto-html/popper.min.js"></script>
+<script src="vgc_ranking_blog_files/libs/quarto-html/tippy.umd.min.js"></script>
+<script src="vgc_ranking_blog_files/libs/quarto-html/anchor.min.js"></script>
+<link href="vgc_ranking_blog_files/libs/quarto-html/tippy.css" rel="stylesheet">
+<link href="vgc_ranking_blog_files/libs/quarto-html/quarto-syntax-highlighting-15634bcf2e68342d4ad2dfa704d543f6.css" rel="stylesheet" id="quarto-text-highlighting-styles">
+<script src="vgc_ranking_blog_files/libs/bootstrap/bootstrap.min.js"></script>
+<link href="vgc_ranking_blog_files/libs/bootstrap/bootstrap-icons.css" rel="stylesheet">
+<link href="vgc_ranking_blog_files/libs/bootstrap/bootstrap-67270d1595a62d14f123c043d4fb2f18.min.css" rel="stylesheet" append-hash="true" id="quarto-bootstrap" data-mode="light">
+
+  <script src="https://cdnjs.cloudflare.com/polyfill/v3/polyfill.min.js?features=es6"></script>
+  <script defer="" src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml-full.js" type="text/javascript"></script>
+
+<script type="text/javascript">
+const typesetMath = (el) => {
+  if (window.MathJax) {
+    // MathJax Typeset
+    window.MathJax.typeset([el]);
+  } else if (window.katex) {
+    // KaTeX Render
+    var mathElements = el.getElementsByClassName("math");
+    var macros = [];
+    for (var i = 0; i < mathElements.length; i++) {
+      var texText = mathElements[i].firstChild;
+      if (mathElements[i].tagName == "SPAN" && texText && texText.data) {
+        window.katex.render(texText.data, mathElements[i], {
+          displayMode: mathElements[i].classList.contains('display'),
+          throwOnError: false,
+          macros: macros,
+          fleqn: false
+        });
+      }
+    }
+  }
+}
+window.Quarto = {
+  typesetMath
+};
+</script>
+
+</head>
+
+<body class="quarto-light">
+
+<div id="quarto-content" class="page-columns page-rows-contents page-layout-article">
+<div id="quarto-margin-sidebar" class="sidebar margin-sidebar">
+  <nav id="TOC" role="doc-toc" class="toc-active">
+    <h2 id="toc-title">Table of contents</h2>
+   
+  <ul>
+  <li><a href="#the-question-and-why-it-is-harder-than-it-looks" id="toc-the-question-and-why-it-is-harder-than-it-looks" class="nav-link active" data-scroll-target="#the-question-and-why-it-is-harder-than-it-looks"><span class="header-section-number">1</span> The question, and why it is harder than it looks</a></li>
+  <li><a href="#building-a-head-to-head-dataset" id="toc-building-a-head-to-head-dataset" class="nav-link" data-scroll-target="#building-a-head-to-head-dataset"><span class="header-section-number">2</span> Building a head-to-head dataset</a>
+  <ul class="collapse">
+  <li><a href="#the-source" id="toc-the-source" class="nav-link" data-scroll-target="#the-source"><span class="header-section-number">2.1</span> The source</a></li>
+  <li><a href="#the-cleaning-problem-nobody-warns-you-about" id="toc-the-cleaning-problem-nobody-warns-you-about" class="nav-link" data-scroll-target="#the-cleaning-problem-nobody-warns-you-about"><span class="header-section-number">2.2</span> The cleaning problem nobody warns you about</a></li>
+  </ul></li>
+  <li><a href="#model-1-a-hierarchical-bayesian-bradley-terry-with-structured-strength" id="toc-model-1-a-hierarchical-bayesian-bradley-terry-with-structured-strength" class="nav-link" data-scroll-target="#model-1-a-hierarchical-bayesian-bradley-terry-with-structured-strength"><span class="header-section-number">3</span> Model 1: a hierarchical Bayesian Bradley-Terry with structured strength</a>
+  <ul class="collapse">
+  <li><a href="#the-likelihood" id="toc-the-likelihood" class="nav-link" data-scroll-target="#the-likelihood"><span class="header-section-number">3.1</span> The likelihood</a></li>
+  <li><a href="#decomposing-strength" id="toc-decomposing-strength" class="nav-link" data-scroll-target="#decomposing-strength"><span class="header-section-number">3.2</span> Decomposing strength</a></li>
+  <li><a href="#the-hierarchy-why-rare-items-do-not-wreck-the-model" id="toc-the-hierarchy-why-rare-items-do-not-wreck-the-model" class="nav-link" data-scroll-target="#the-hierarchy-why-rare-items-do-not-wreck-the-model"><span class="header-section-number">3.3</span> The hierarchy: why rare items do not wreck the model</a></li>
+  <li><a href="#inference" id="toc-inference" class="nav-link" data-scroll-target="#inference"><span class="header-section-number">3.4</span> Inference</a></li>
+  </ul></li>
+  <li><a href="#model-2-low-rank-synergy-a-factorisation-machine-inside-the-likelihood" id="toc-model-2-low-rank-synergy-a-factorisation-machine-inside-the-likelihood" class="nav-link" data-scroll-target="#model-2-low-rank-synergy-a-factorisation-machine-inside-the-likelihood"><span class="header-section-number">4</span> Model 2: low-rank synergy — a factorisation machine inside the likelihood</a></li>
+  <li><a href="#model-3-beyond-linearity-a-siamese-set-transformer" id="toc-model-3-beyond-linearity-a-siamese-set-transformer" class="nav-link" data-scroll-target="#model-3-beyond-linearity-a-siamese-set-transformer"><span class="header-section-number">5</span> Model 3: beyond linearity — a Siamese Set Transformer</a></li>
+  <li><a href="#results" id="toc-results" class="nav-link" data-scroll-target="#results"><span class="header-section-number">6</span> Results</a>
+  <ul class="collapse">
+  <li><a href="#the-headline-the-pilot-dwarfs-the-team-sheet" id="toc-the-headline-the-pilot-dwarfs-the-team-sheet" class="nav-link" data-scroll-target="#the-headline-the-pilot-dwarfs-the-team-sheet"><span class="header-section-number">6.1</span> The headline: the pilot dwarfs the team sheet</a></li>
+  <li><a href="#no-single-pokémon-is-a-statistically-established-best-pick" id="toc-no-single-pokémon-is-a-statistically-established-best-pick" class="nav-link" data-scroll-target="#no-single-pokémon-is-a-statistically-established-best-pick"><span class="header-section-number">6.2</span> No single Pokémon is a statistically established “best pick”</a></li>
+  <li><a href="#where-the-signal-is-moves-items-natures" id="toc-where-the-signal-is-moves-items-natures" class="nav-link" data-scroll-target="#where-the-signal-is-moves-items-natures"><span class="header-section-number">6.3</span> Where the signal <em>is</em>: moves, items, natures</a></li>
+  <li><a href="#the-strongest-teams" id="toc-the-strongest-teams" class="nav-link" data-scroll-target="#the-strongest-teams"><span class="header-section-number">6.4</span> The strongest teams</a></li>
+  <li><a href="#synergy-real-small-and-concentrated" id="toc-synergy-real-small-and-concentrated" class="nav-link" data-scroll-target="#synergy-real-small-and-concentrated"><span class="header-section-number">6.5</span> Synergy: real, small, and concentrated</a></li>
+  <li><a href="#did-non-linearity-help-no-and-that-is-a-result" id="toc-did-non-linearity-help-no-and-that-is-a-result" class="nav-link" data-scroll-target="#did-non-linearity-help-no-and-that-is-a-result"><span class="header-section-number">6.6</span> Did non-linearity help? No — and that is a result</a></li>
+  <li><a href="#how-predictable-is-a-vgc-match-anyway" id="toc-how-predictable-is-a-vgc-match-anyway" class="nav-link" data-scroll-target="#how-predictable-is-a-vgc-match-anyway"><span class="header-section-number">6.7</span> How predictable is a VGC match, anyway?</a></li>
+  </ul></li>
+  <li><a href="#what-this-means-for-worlds-and-why-it-is-already-going-stale" id="toc-what-this-means-for-worlds-and-why-it-is-already-going-stale" class="nav-link" data-scroll-target="#what-this-means-for-worlds-and-why-it-is-already-going-stale"><span class="header-section-number">7</span> What this means for Worlds — and why it is already going stale</a></li>
+  <li><a href="#reproducibility" id="toc-reproducibility" class="nav-link" data-scroll-target="#reproducibility"><span class="header-section-number">8</span> Reproducibility</a></li>
+  </ul>
+</nav>
+</div>
+<main class="content" id="quarto-document-content">
+
+<header id="title-block-header" class="quarto-title-block default">
+<div class="quarto-title">
+<h1 class="title">Who Enters Worlds as the Favourite? A Bayesian Ranking Model for Competitive Pokémon VGC</h1>
+<p class="subtitle lead">Hierarchical Bradley-Terry models, factorisation-machine synergy, and a Set Transformer — what 17,581 tournament matches actually tell us about the Regulation M-B metagame</p>
+  <div class="quarto-categories">
+    <div class="quarto-category">bayesian-statistics</div>
+    <div class="quarto-category">pymc</div>
+    <div class="quarto-category">pokemon</div>
+    <div class="quarto-category">ranking-models</div>
+    <div class="quarto-category">deep-learning</div>
+  </div>
+  </div>
+
+
+
+<div class="quarto-title-meta">
+
+    <div>
+    <div class="quarto-title-meta-heading">Author</div>
+    <div class="quarto-title-meta-contents">
+             <p>Matteo Morella </p>
+          </div>
+  </div>
+    
+    <div>
+    <div class="quarto-title-meta-heading">Published</div>
+    <div class="quarto-title-meta-contents">
+      <p class="date">July 25, 2026</p>
+    </div>
+  </div>
+  
+    
+  </div>
+  
+
+
+</header>
+
+
+<section id="the-question-and-why-it-is-harder-than-it-looks" class="level2" data-number="1">
+<h2 data-number="1" class="anchored" data-anchor-id="the-question-and-why-it-is-harder-than-it-looks"><span class="header-section-number">1</span> The question, and why it is harder than it looks</h2>
+<p>Every August, the Pokémon Video Game Championships crown a world champion. In 2026 the tournament runs on <em>Pokémon Champions</em> under Regulation Set M-B — a format with Mega Evolutions, without Terastallization, and with a metagame that has had only a few months to crystallise. The question every competitive player asks in the run-up is the same one every sports analyst asks before a major: <strong>who enters as the favourite?</strong></p>
+<p>For most sports this is a solved problem in outline: collect head-to-head results, fit a paired-comparison model, read off the latent strengths. Elo does it for chess; my earlier <a href="https://github.com/mat126/bayesian-uefa-swiss">Bayesian UEFA Swiss-system simulator</a> does it for club football. VGC breaks the standard recipe in two specific places, and this project is essentially the story of repairing both.</p>
+<p><strong>The first break: the unit of competition is combinatorial.</strong> A VGC “competitor” is not a fixed entity like a chess player. It is a team of six Pokémon, and each Pokémon is itself a bundle of choices: four moves from a large learnset, one ability, one held item, one nature. Two teams sharing all six species can still be meaningfully different builds. The consequence is brutal for any model that assigns a free strength parameter per competitor: in my final dataset of 17,581 matches there are <strong>5,393 distinct teams, of which only 95 appear five or more times</strong>. A classical Bradley-Terry model with one parameter per team would have roughly one observation per parameter. Nothing identifiable survives that.</p>
+<p><strong>The second break: the data does not come as head-to-head outcomes.</strong> The community’s best-known statistics — usage rates from Victory Road or Pikalytics — tell you <em>how often</em> a Pokémon is brought, not <em>who beats whom</em>. Usage is a popularity contest confounded with strength; a paired-comparison likelihood needs pairings and winners with both teams observed. That data exists, but it has to be assembled, and it arrives dirty in ways worth documenting.</p>
+<p>The rest of this post walks through the pipeline (briefly), then through three models in increasing order of expressiveness — an additive hierarchical Bayesian Bradley-Terry, the same model with a low-rank synergy term, and a fully non-linear Set Transformer — with the mathematics spelled out, and finally through what the fitted models actually say about the Regulation M-B metagame. The punchline is not the ranking itself. The punchline is what the posterior uncertainty does to the ranking, and how much of the outcome signal turns out to live somewhere other than the team sheet.</p>
+</section>
+<section id="building-a-head-to-head-dataset" class="level2" data-number="2">
+<h2 data-number="2" class="anchored" data-anchor-id="building-a-head-to-head-dataset"><span class="header-section-number">2</span> Building a head-to-head dataset</h2>
+<section id="the-source" class="level3" data-number="2.1">
+<h3 data-number="2.1" class="anchored" data-anchor-id="the-source"><span class="header-section-number">2.1</span> The source</h3>
+<p>The workable source turned out to be the <strong>public Limitless API</strong>. Limitless hosts a large share of the online VGC tournament circuit, and — crucially — requires teamlist submission. Its <code>standings</code> endpoint returns each player’s full structured teamlist (species, item, ability, nature, four moves per slot), and its <code>pairings</code> endpoint returns per-round pairings with winners. Joining the two yields exactly the object a Bradley-Terry likelihood wants:</p>
+<p><span class="math display">\[
+(\text{team}_A,\ \text{team}_B,\ y), \qquad y = \mathbb{1}[\text{A won}].
+\]</span></p>
+<p>One subtlety: a <code>pairings</code> row is one <em>match</em>, not one game, so a best-of-three enters as a single Bernoulli observation with the series winner. That is coherent with the likelihood below, though it does mean a Bo3 row carries the same nominal weight as a Bo1 row.</p>
+<p>The final pull: <strong>17,581 decisive matches</strong> across Regulation M-B tournaments, involving <strong>3,878 distinct players</strong>, with complete teamlists on both sides of every match.</p>
+</section>
+<section id="the-cleaning-problem-nobody-warns-you-about" class="level3" data-number="2.2">
+<h3 data-number="2.2" class="anchored" data-anchor-id="the-cleaning-problem-nobody-warns-you-about"><span class="header-section-number">2.2</span> The cleaning problem nobody warns you about</h3>
+<p>Teamlists are submitted by players in the language of their own game copy. The raw data therefore contained <em>56 distinct “natures”</em> — in a game that has exactly 25. “Modest”, “Modesta”, “Modeste” and “MODESTA” all name the same thing; “Adament”, “Adman” and “Adanant” are all attempts at “Adamant”; and a nonzero number of players typed an ability into the nature field. Moves and abilities were polluted the same way (861 raw “moves”, 294 raw “abilities”).</p>
+<p>What rescues this from being a data-cleaning nightmare is that <strong>the vocabulary is closed and known</strong>. There are exactly 25 natures, ~300 abilities, ~900 moves, each with official names in every localisation, all published in PokéAPI’s multilingual CSV tables. Canonicalisation then becomes an almost fully automatic cascade: normalise to a slug (lowercase, strip accents and punctuation), exact-match against the multilingual table (which resolves <em>every</em> official language in one step), fuzzy-match the residue against the canonical English list (which resolves typos — “Timmid” has exactly one plausible neighbour), and hand-map the last dozen tokens.</p>
+<p>One class of “unresolved” tokens was deliberately left alone: <strong>the new Champions Mega Stones</strong>. Floettite (6,598 occurrences), Raichunite Y, Staraptite, Delphoxite and 49 others do not exist in PokéAPI because the game postdates it. They are internally consistent strings, so they function perfectly well as features — and, as we will see, they matter.</p>
+</section>
+</section>
+<section id="model-1-a-hierarchical-bayesian-bradley-terry-with-structured-strength" class="level2" data-number="3">
+<h2 data-number="3" class="anchored" data-anchor-id="model-1-a-hierarchical-bayesian-bradley-terry-with-structured-strength"><span class="header-section-number">3</span> Model 1: a hierarchical Bayesian Bradley-Terry with structured strength</h2>
+<section id="the-likelihood" class="level3" data-number="3.1">
+<h3 data-number="3.1" class="anchored" data-anchor-id="the-likelihood"><span class="header-section-number">3.1</span> The likelihood</h3>
+<p>The Bradley-Terry model (Bradley &amp; Terry, 1952) assigns each competitor a latent strength <span class="math inline">\(s \in \mathbb{R}\)</span> and links the win probability to the strength <em>difference</em> through the logistic function:</p>
+<p><span class="math display">\[
+P(A \text{ beats } B) \;=\; \sigma\big(s(A) - s(B)\big), \qquad
+\sigma(z) = \frac{1}{1+e^{-z}}.
+\]</span></p>
+<p>Each match contributes a Bernoulli term, and the full log-likelihood is a sum over matches. The difference structure has a property worth making explicit because everything downstream inherits it: it enforces <strong>antisymmetry by construction</strong>, <span class="math inline">\(P(A&gt;B) = 1 - P(B&gt;A)\)</span>, and any constant added to <em>all</em> strengths cancels. Strengths are identified only up to location — which will come back as a modelling decision shortly.</p>
+<p>Two additions to the bare likelihood. A <strong>side intercept</strong> <span class="math inline">\(c\)</span> absorbs any systematic player1/player2 asymmetry (in this data, player1 wins 51.3% of the time — small, but real, and better modelled than ignored). And a <strong>player skill term</strong>: writing <span class="math inline">\(\pi_1(m), \pi_2(m)\)</span> for the pilots in match <span class="math inline">\(m\)</span>,</p>
+<p><span class="math display">\[
+\eta_m \;=\; c \;+\; \big(s(A_m) - s(B_m)\big) \;+\; \big(\lambda_{\pi_1(m)} - \lambda_{\pi_2(m)}\big),
+\qquad y_m \sim \text{Bernoulli}\big(\sigma(\eta_m)\big).
+\]</span></p>
+<p>The player term is not decoration. Strong players choose strong teams; without <span class="math inline">\(\lambda\)</span>, the skill of good pilots leaks into the coefficients of whatever they happen to bring, and the model measures <em>who</em> plays rather than <em>what</em> is played. Foreshadowing: this term will turn out to be the single most important component of the entire model.</p>
+</section>
+<section id="decomposing-strength" class="level3" data-number="3.2">
+<h3 data-number="3.2" class="anchored" data-anchor-id="decomposing-strength"><span class="header-section-number">3.2</span> Decomposing strength</h3>
+<p>The move that makes the combinatorics tractable is to refuse to give teams free parameters. A team <span class="math inline">\(T\)</span> is a set of six builds; each build <span class="math inline">\(b\)</span> has a species <span class="math inline">\(\sigma(b)\)</span>, a move-set <span class="math inline">\(\mathcal{M}(b)\)</span> (four moves), an ability <span class="math inline">\(a(b)\)</span>, an item <span class="math inline">\(i(b)\)</span> and a nature <span class="math inline">\(\nu(b)\)</span>. Strength is defined <em>compositionally</em>:</p>
+<p><span class="math display">\[
+s(T) \;=\; \sum_{b \in T} \varphi(b), \qquad
+\varphi(b) \;=\; \alpha_{\sigma(b)} \;+\; \sum_{k \in \mathcal{M}(b)} \mu_k
+\;+\; \beta_{a(b)} \;+\; \gamma_{i(b)} \;+\; \delta_{\nu(b)}.
+\]</span></p>
+<p>Every effect is a log-odds contribution: <span class="math inline">\(\alpha\)</span> for species (the anchor), <span class="math inline">\(\mu\)</span> for moves, <span class="math inline">\(\beta\)</span> for abilities, <span class="math inline">\(\gamma\)</span> for items, <span class="math inline">\(\delta\)</span> for natures. A team never seen before still receives a coherent strength, assembled from parts that recur across thousands of matches. This is what converts 5,393 unidentifiable team parameters into roughly a thousand well-shared feature parameters (219 species + 420 moves + 162 items + 168 abilities + 23 natures after frequency thresholding).</p>
+<p>There is a computational identity hiding here that makes implementation almost embarrassingly simple. Because <span class="math inline">\(s(T)\)</span> is <strong>linear in feature counts</strong>, collect the counts into a vector <span class="math inline">\(x_T\)</span> (how many times each species, move, item… appears in the team — note moves genuinely count above one: a team running Protect on four slots has a Protect count of 4). Then</p>
+<p><span class="math display">\[
+s(A) - s(B) \;=\; \theta^\top (x_A - x_B),
+\]</span></p>
+<p>with <span class="math inline">\(\theta\)</span> stacking all the coefficient blocks. The additive Bradley-Terry with structured strength <em>is</em> a logistic regression on the <strong>difference of count vectors</strong>. The design matrix of the whole project is that difference, one row per match.</p>
+</section>
+<section id="the-hierarchy-why-rare-items-do-not-wreck-the-model" class="level3" data-number="3.3">
+<h3 data-number="3.3" class="anchored" data-anchor-id="the-hierarchy-why-rare-items-do-not-wreck-the-model"><span class="header-section-number">3.3</span> The hierarchy: why rare items do not wreck the model</h3>
+<p>Rare levels are everywhere in this data — items brought a handful of times, moves on one niche set. Maximum likelihood would assign them wild coefficients. The Bayesian answer is <strong>partial pooling</strong> through a scale hierarchy: each block gets its own dispersion parameter,</p>
+<p><span class="math display">\[
+\alpha_\sigma \sim \mathcal{N}(0, \tau_\alpha^2), \quad
+\mu_k \sim \mathcal{N}(0, \tau_\mu^2), \quad \ldots \quad
+\lambda_\pi \sim \mathcal{N}(0, \tau_\lambda^2),
+\]</span></p>
+<p>with half-normal hyperpriors on every <span class="math inline">\(\tau\)</span>. A rarely-seen item is shrunk toward zero in proportion to how weakly the data supports it; a frequent one is free to take whatever value the matches indicate. No arbitrary cutoff decides this — the <span class="math inline">\(\tau\)</span>’s, estimated from the data, do.</p>
+<p>The <span class="math inline">\(\tau\)</span>’s also serve a second role that ends up carrying the headline result: they are a <strong>variance decomposition</strong>. <span class="math inline">\(\tau_{\text{player}}\)</span> versus <span class="math inline">\(\tau_{\text{species}}\)</span> answers, directly, “how much of the outcome variation is pilot, and how much is team sheet?”</p>
+<p>Two technical points that cost real debugging time and deserve to be written down.</p>
+<p><strong>Identifiability.</strong> Every team has exactly six species, so adding a constant <span class="math inline">\(\kappa\)</span> to all <span class="math inline">\(\alpha\)</span>’s adds <span class="math inline">\(6\kappa\)</span> to every strength and cancels in every difference. Left alone, the chains drift along this flat direction. The fix is a <strong>sum-to-zero constraint</strong> per block (PyMC’s <code>ZeroSumNormal</code>), after which every coefficient reads as “relative to its block average”.</p>
+<p><strong>The funnel.</strong> <code>ZeroSumNormal</code> is non-centred <em>with respect to the sum-to-zero constraint</em> — but <strong>not</strong> with respect to the hierarchical scale. Writing <code>ZeroSumNormal(sigma=tau)</code> keeps the centred parameterisation in <span class="math inline">\(\tau\)</span>, and with 1,657 player effects hanging off a single scale, that is a textbook funnel (Betancourt &amp; Girolami, 2015): the sampler’s step size collapses (I watched chains freeze at <span class="math inline">\(\epsilon = 0.001\)</span> while their siblings adapted to <span class="math inline">\(0.1\)</span>). The cure is the explicit non-centred form,</p>
+<p><span class="math display">\[
+\tilde\lambda_\pi \sim \mathcal{N}(0,1) \ \text{(sum-to-zero)}, \qquad
+\lambda_\pi = \tau_\lambda \, \tilde\lambda_\pi,
+\]</span></p>
+<p>which decouples the geometry of the raw variables from the scale. After this change, step sizes doubled and gradient evaluations per draw dropped from 255–1023 to a uniform 31.</p>
+<p><strong>Conditioning.</strong> One more practical surgery: of the 3,878 players, most appear in a handful of matches. A player with two matches has an essentially unidentified <span class="math inline">\(\lambda\)</span> — a flat direction that forces NUTS into maximal-depth trajectories. Players below eight matches were therefore pooled to a shared zero effect (their <em>matches</em> remain in the likelihood and keep informing the team-level effects; only the individual skill parameter is dropped). This kept 1,657 individually-modelled players and made the difference between a sampler that saturated its tree depth and one that cruised.</p>
+</section>
+<section id="inference" class="level3" data-number="3.4">
+<h3 data-number="3.4" class="anchored" data-anchor-id="inference"><span class="header-section-number">3.4</span> Inference</h3>
+<p>Two regimes were used deliberately. <strong>ADVI</strong> (mean-field variational inference) for iteration: minutes per fit, but it approximates the posterior with a factorised Gaussian and is known to underestimate uncertainty. <strong>NUTS</strong> for the final estimates — run through the <code>numpyro</code> backend on a Kaggle GPU, because the dominant cost is dense matrix–vector products (<span class="math inline">\(17{,}581 \times \sim 1{,}000\)</span> per block per gradient), which is exactly the workload GPUs eat. The GPU run converged cleanly: <span class="math inline">\(\hat R \le 1.02\)</span> everywhere, bulk effective sample sizes in the hundreds to thousands, zero divergences.</p>
+<p>The ADVI-versus-NUTS comparison is itself a result worth reporting: the NUTS posterior scales came out at roughly <strong>half</strong> the ADVI values across every block, and intervals widened substantially. Every “finding” that looked crisp under ADVI had to be re-litigated under the real posterior — and, as the results section shows, most species-level findings did not survive. If you take one methodological message from this post: <em>do not publish variational intervals for hierarchical models without checking them against MCMC</em>.</p>
+</section>
+</section>
+<section id="model-2-low-rank-synergy-a-factorisation-machine-inside-the-likelihood" class="level2" data-number="4">
+<h2 data-number="4" class="anchored" data-anchor-id="model-2-low-rank-synergy-a-factorisation-machine-inside-the-likelihood"><span class="header-section-number">4</span> Model 2: low-rank synergy — a factorisation machine inside the likelihood</h2>
+<p>The additive model has a visible blind spot: it prices every Pokémon independently of its teammates. VGC players will tell you this is wrong — the game is built around cores, weather engines, Trick Room modes. The value of a redirection support depends on what it redirects <em>for</em>.</p>
+<p>The naive fix — a free interaction <span class="math inline">\(\omega_{ss'}\)</span> for every species pair — needs <span class="math inline">\(\binom{219}{2} \approx 24{,}000\)</span> parameters, most for pairs never observed together. The scalable fix is <strong>low-rank</strong>: give each species a latent vector <span class="math inline">\(v_s \in \mathbb{R}^d\)</span> (I used <span class="math inline">\(d=4\)</span>) and let pairwise synergy be an inner product. The team-level synergy term is</p>
+<p><span class="math display">\[
+\psi(T) \;=\; \sum_{\{s,s'\} \subseteq T,\ s \ne s'} \langle v_s, v_{s'} \rangle ,
+\]</span></p>
+<p>which is precisely the second-order term of a <strong>factorisation machine</strong> (Rendle, 2010). Two properties make it attractive here. First, the closed form</p>
+<p><span class="math display">\[
+\psi(T) \;=\; \tfrac{1}{2}\Big( \big\lVert \textstyle\sum_{s \in T} v_s \big\rVert^2
+\;-\; \sum_{s \in T} \lVert v_s \rVert^2 \Big)
+\]</span></p>
+<p>computes it in <span class="math inline">\(O(kd)\)</span> instead of <span class="math inline">\(O(k^2 d)\)</span> — the squared sum contains all cross terms plus the diagonal, and subtracting the norms removes exactly the diagonal. Second, that same subtraction guarantees a species generates <strong>no self-synergy</strong>: solo value stays entirely in <span class="math inline">\(\alpha_s\)</span>, and <span class="math inline">\(\psi\)</span> captures only what emerges from the <em>pairing</em>. The decomposition between main effect and interaction is clean by construction.</p>
+<p>One implementation consequence: <span class="math inline">\(\psi\)</span> is quadratic in the species counts, so <span class="math inline">\(\psi(A) - \psi(B)\)</span> does <strong>not</strong> reduce to a function of <span class="math inline">\(x_A - x_B\)</span>. The synergy model needs per-side count matrices, not just their difference — the one place where the tidy “logistic regression on differences” picture breaks.</p>
+<p>The latent vectors get a deliberately tight prior (<span class="math inline">\(\tau_{\text{syn}} \sim
+\text{HalfNormal}(0.2)\)</span>, non-centred): the quadratic term should only claim variance the additive part leaves on the table, and a loose prior here destabilised ADVI badly enough to produce NaN cascades before it was tightened.</p>
+<p>An interpretive note before reading any synergy output: inner products are invariant to rotations of the latent space, so <strong>individual coordinates of <span class="math inline">\(v_s\)</span> mean nothing</strong>. The identified quantities are the pairwise products <span class="math inline">\(\langle v_s, v_{s'} \rangle\)</span> and the total <span class="math inline">\(\psi(T)\)</span> — read those, never the axes.</p>
+</section>
+<section id="model-3-beyond-linearity-a-siamese-set-transformer" class="level2" data-number="5">
+<h2 data-number="5" class="anchored" data-anchor-id="model-3-beyond-linearity-a-siamese-set-transformer"><span class="header-section-number">5</span> Model 3: beyond linearity — a Siamese Set Transformer</h2>
+<p>The factorisation machine is still a degree-2 polynomial in the features. If the metagame contains genuinely higher-order structure — a Pokémon whose value depends on the <em>joint</em> presence of two specific partners, mode-based teams whose strength is not any sum of pairs — neither Bayesian model can represent it. The third model asks the question directly: <strong>does letting a neural network learn the strength function buy predictive accuracy?</strong></p>
+<p>The architecture is not a generic MLP, and the reasons why are the interesting part. Two structural facts about the problem dictate almost everything:</p>
+<p><strong>Antisymmetry</strong> must survive. This is achieved with a <strong>Siamese</strong> design: one tower <span class="math inline">\(f_\theta\)</span> (shared weights) scores each team to a scalar, and the logit is the difference,</p>
+<p><span class="math display">\[
+\eta \;=\; f_\theta(A) - f_\theta(B) + c ,
+\]</span></p>
+<p>so <span class="math inline">\(P(A&gt;B) = 1 - P(B&gt;A)\)</span> holds by construction, exactly as in Bradley-Terry. A network that concatenated both teams and classified would have to <em>learn</em> antisymmetry from data, and would learn it imperfectly.</p>
+<p><strong>Double permutation invariance</strong> must survive. The four moves of a Pokémon are an unordered set; the six Pokémon of a team are an unordered set. Flattening a team into a fixed-position vector would force the network to re-learn “Incineroar” separately for every slot — a catastrophic waste of 17k matches. The tower therefore reads, bottom to top:</p>
+<ol type="1">
+<li><strong>Embeddings</strong> for each categorical feature (species, move, ability, item, nature; <span class="math inline">\(d=24\)</span>), giving every symbol one shared learned vector regardless of position. This is the neural analogue of the Bayesian coefficients — parameter sharing as statistical strength.</li>
+<li><strong>Mean-pooling over the four move embeddings</strong> — a symmetric function, so move order is irrelevant <em>by construction</em>, not by training.</li>
+<li>A <strong>per-Pokémon MLP</strong> (<span class="math inline">\(5d \to h \to h\)</span>, <span class="math inline">\(h=64\)</span>, shared across the six slots) fusing the feature bundle non-linearly — an item’s value may depend on the ability next to it.</li>
+<li><strong>Self-attention across the six Pokémon</strong> (a small Transformer encoder, <em>no positional encoding</em>). This is where synergy lives: each Pokémon’s representation is updated as an attention-weighted combination of its teammates, <span class="math inline">\(\text{Attn}(\Phi) = \text{softmax}(QK^\top/\sqrt{d_k})\,V\)</span>, so an Incineroar next to a Trick Room setter is literally represented differently from an Incineroar on a hyper-offence team. Omitting positional encodings keeps the map permutation-<em>equivariant</em>.</li>
+<li><strong>Mean-pooling over the six</strong> (equivariant map followed by symmetric pool ⇒ invariant function — the Deep Sets / Set Transformer recipe (Zaheer et al., 2017; Lee et al., 2019)), then a scalar head.</li>
+</ol>
+<p>Training: binary cross-entropy, Adam with weight decay <span class="math inline">\(10^{-4}\)</span> (which is, read through a Bayesian lens, a Gaussian prior on the weights — the network’s version of shrinkage), dropout, early stopping on validation log-loss, and free data augmentation by swapping A/B with flipped labels, which reinforces antisymmetry. The final model has <strong>106,738 parameters</strong> — deliberately small, because with 17k matches and sparse features, capacity is the enemy. Uncertainty at inference time comes from <strong>MC-dropout</strong>: dropout stays active and each team is scored repeatedly, the spread standing in for a predictive interval.</p>
+</section>
+<section id="results" class="level2" data-number="6">
+<h2 data-number="6" class="anchored" data-anchor-id="results"><span class="header-section-number">6</span> Results</h2>
+<p>Everything below is from the NUTS posteriors (4 chains × 800 draws, <span class="math inline">\(\hat R \le 1.02\)</span>) unless labelled otherwise. Read every table <strong>by interval, not by mean</strong>: an effect whose 90% interval crosses zero is not established by this data.</p>
+<section id="the-headline-the-pilot-dwarfs-the-team-sheet" class="level3" data-number="6.1">
+<h3 data-number="6.1" class="anchored" data-anchor-id="the-headline-the-pilot-dwarfs-the-team-sheet"><span class="header-section-number">6.1</span> The headline: the pilot dwarfs the team sheet</h3>
+<p>The posterior block scales, additive model:</p>
+<table class="caption-top table">
+<colgroup>
+<col style="width: 33%">
+<col style="width: 33%">
+<col style="width: 33%">
+</colgroup>
+<thead>
+<tr class="header">
+<th>Block</th>
+<th><span class="math inline">\(\tau\)</span> (posterior mean)</th>
+<th>interpretation</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><strong>player</strong></td>
+<td><strong>0.550</strong></td>
+<td>dominant, and precisely estimated (0.50–0.60)</td>
+</tr>
+<tr class="even">
+<td>ability</td>
+<td>0.107</td>
+<td></td>
+</tr>
+<tr class="odd">
+<td>item</td>
+<td>0.102</td>
+<td></td>
+</tr>
+<tr class="even">
+<td>species</td>
+<td>0.096</td>
+<td></td>
+</tr>
+<tr class="odd">
+<td>moves</td>
+<td>0.077</td>
+<td></td>
+</tr>
+<tr class="even">
+<td>nature</td>
+<td>0.058</td>
+<td>smallest</td>
+</tr>
+</tbody>
+</table>
+<p>Player skill carries roughly <strong>five times</strong> the dispersion of any team feature. The three leading team blocks — ability, item, species — have almost completely overlapping intervals and should be read as <em>statistically indistinguishable from each other</em>; only their collective gap to the player term is unambiguous.</p>
+<p>Put plainly: in online Regulation M-B tournaments, <strong>who is playing predicts outcomes far better than what they are playing</strong>. Team choice matters — the team blocks are not zero — but it is a second-order effect next to the pilot.</p>
+<p>One honest caveat before this becomes a slogan. Player skill and team strength separate only through the player × team crossing in the data. A pilot who always brings the same list makes the two partially collinear, and some team strength can hide inside <span class="math inline">\(\lambda\)</span>. The magnitude of the gap makes the qualitative conclusion robust; the exact ratio should not be quoted as a causal decomposition.</p>
+</section>
+<section id="no-single-pokémon-is-a-statistically-established-best-pick" class="level3" data-number="6.2">
+<h3 data-number="6.2" class="anchored" data-anchor-id="no-single-pokémon-is-a-statistically-established-best-pick"><span class="header-section-number">6.2</span> No single Pokémon is a statistically established “best pick”</h3>
+<p>This is the result that changed most between ADVI and NUTS, and the one I find most interesting. Under the full posterior, <strong>zero of 219 species have an effect whose interval clears zero</strong>. The top of the table:</p>
+<table class="caption-top table">
+<thead>
+<tr class="header">
+<th>Species</th>
+<th>mean</th>
+<th>5%–95%</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>Kangaskhan</td>
+<td>0.107</td>
+<td>−0.026 – 0.266</td>
+</tr>
+<tr class="even">
+<td>Archaludon</td>
+<td>0.102</td>
+<td>−0.024 – 0.248</td>
+</tr>
+<tr class="odd">
+<td>Eternal Flower Floette</td>
+<td>0.100</td>
+<td>−0.019 – 0.232</td>
+</tr>
+<tr class="even">
+<td>Charizard</td>
+<td>0.096</td>
+<td>−0.017 – 0.218</td>
+</tr>
+<tr class="odd">
+<td>Froslass</td>
+<td>0.094</td>
+<td>−0.032 – 0.238</td>
+</tr>
+</tbody>
+</table>
+<p>Under ADVI’s too-narrow intervals, Charizard and Floette had looked like solid positive effects. The real posterior says: plausible, not established. Given the player result above, this is coherent rather than disappointing — once pilot skill absorbs its share of the variance, the marginal effect of <em>one species slot out of six</em> is simply small relative to what 17k noisy Bernoulli outcomes can pin down. The data supports a metagame reading in which <strong>no single species is an auto-win button</strong>; value lives in whole configurations and in the hands holding them.</p>
+</section>
+<section id="where-the-signal-is-moves-items-natures" class="level3" data-number="6.3">
+<h3 data-number="6.3" class="anchored" data-anchor-id="where-the-signal-is-moves-items-natures"><span class="header-section-number">6.3</span> Where the signal <em>is</em>: moves, items, natures</h3>
+<p>Interestingly, identifiability improves as we move from “which Pokémon” to “which choices”. <strong>Twelve moves</strong> clear zero, and their identity sketches a coherent picture of what wins in M-B — control, positioning and utility over raw damage:</p>
+<table class="caption-top table">
+<thead>
+<tr class="header">
+<th>Move</th>
+<th>mean</th>
+<th>5%–95%</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>Encore</td>
+<td>0.121</td>
+<td>0.053 – 0.190</td>
+</tr>
+<tr class="even">
+<td>Weather Ball</td>
+<td>0.115</td>
+<td>0.043 – 0.189</td>
+</tr>
+<tr class="odd">
+<td>Quick Guard</td>
+<td>0.112</td>
+<td>0.013 – 0.220</td>
+</tr>
+<tr class="even">
+<td>Swords Dance</td>
+<td>0.107</td>
+<td>0.031 – 0.185</td>
+</tr>
+<tr class="odd">
+<td>Stomping Tantrum</td>
+<td>0.100</td>
+<td>0.033 – 0.167</td>
+</tr>
+<tr class="even">
+<td>Thunderbolt</td>
+<td>0.082</td>
+<td>0.017 – 0.150</td>
+</tr>
+</tbody>
+</table>
+<p>(Also robust: Low Kick, Protect, Life Dew, Liquidation, Ice Beam, Thunder.) Encore leading the format is a very “doubles” result: tempo denial beats power. Weather Ball’s position points at active weather engines.</p>
+<p><strong>Seven items</strong> clear zero, led by <strong>Venusaurite</strong> (0.143, 0.018–0.282) — Mega Venusaur’s stone, and the single largest robust coefficient among all features — with Light Clay (screens support) and Passho Berry alongside. The Mega Stones’ presence at the top of the item table confirms the format-defining role of Mega Evolution; Floettite actually has the highest posterior <em>mean</em> (0.143) but its interval grazes zero (−0.004), a reminder that this format’s most hyped legendary is popular <em>and</em> good but not unambiguously so once uncertainty is honest. <code>No Item</code> also comes out robustly non-zero — running itemless is a real strategic signal, not a data hole.</p>
+<p>Among <strong>natures</strong>, three are robust — Calm (0.091), Modest (0.064), Bold (0.055) — all special-side or defensive, consistent with reading nature as a proxy for the build archetype the EV spread (deliberately excluded from the model) would have revealed.</p>
+<p>Two <strong>abilities</strong> clear zero: Unnerve and Swift Swim. The ability block suffers from an extra handicap — roughly 8,500 slots have the ability missing in the source data, handled by partial pooling rather than row deletion, but inevitably widening those posteriors.</p>
+</section>
+<section id="the-strongest-teams" class="level3" data-number="6.4">
+<h3 data-number="6.4" class="anchored" data-anchor-id="the-strongest-teams"><span class="header-section-number">6.4</span> The strongest teams</h3>
+<p>Team strength <span class="math inline">\(s(T)\)</span> — pilot excluded, so this answers <em>“how strong is the configuration, held constant who pilots it”</em> — for the 95 archetypes seen at least five times. The additive model’s podium:</p>
+<table class="caption-top table">
+<colgroup>
+<col style="width: 20%">
+<col style="width: 20%">
+<col style="width: 20%">
+<col style="width: 20%">
+<col style="width: 20%">
+</colgroup>
+<thead>
+<tr class="header">
+<th>#</th>
+<th>Team</th>
+<th>n</th>
+<th><span class="math inline">\(s(T)\)</span></th>
+<th>5%–95%</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>1</td>
+<td>Sneasler / Blastoise / Kingambit / Incineroar / Delphox / Sinistcha</td>
+<td>7</td>
+<td>2.05</td>
+<td>1.69 – 2.41</td>
+</tr>
+<tr class="even">
+<td>2</td>
+<td>Blastoise / Delphox / Sneasler / Incineroar / Sinistcha / Kingambit</td>
+<td>5</td>
+<td>1.90</td>
+<td>1.55 – 2.26</td>
+</tr>
+<tr class="odd">
+<td>3</td>
+<td>Delphox / Eternal Flower Floette / Sinistcha / Kingambit / Sneasler / Incineroar</td>
+<td>7</td>
+<td>1.82</td>
+<td>1.48 – 2.16</td>
+</tr>
+<tr class="even">
+<td>4</td>
+<td>Froslass / Scovillain / Basculegion / Kingambit / Lycanroc-Dusk / Sneasler</td>
+<td>8</td>
+<td>1.82</td>
+<td>1.46 – 2.19</td>
+</tr>
+<tr class="odd">
+<td>5</td>
+<td>Sinistcha / Kingambit / Sneasler / E. F. Floette / Delphox / Incineroar</td>
+<td>8</td>
+<td>1.81</td>
+<td>1.48 – 2.15</td>
+</tr>
+</tbody>
+</table>
+<p>The top of the table is essentially one archetype in variations: a <strong>Sneasler / Kingambit / Incineroar / Sinistcha core</strong> flexing its last two slots (Blastoise + Delphox, or Floette + Delphox). Rows 1 and 2 share their entire six-species line-up and differ only in sets, and the model prices that set difference at ~0.15 log-odds — a nice illustration of why modelling below the species level was worth the trouble. The synergy model reproduces this ranking almost unchanged (same top three, slightly higher strengths), which is itself informative: pairwise synergy refines, it does not overturn.</p>
+<p>A head-to-head worth quoting for calibration: the model gives team 1 a <strong>54.7% [47.6%, 62.2%]</strong> probability against team 2 at equal pilot skill. Even the top team’s edge over its nearest rival brushes a coin flip. Nobody should read this table as a tier list with cliffs in it.</p>
+</section>
+<section id="synergy-real-small-and-concentrated" class="level3" data-number="6.5">
+<h3 data-number="6.5" class="anchored" data-anchor-id="synergy-real-small-and-concentrated"><span class="header-section-number">6.5</span> Synergy: real, small, and concentrated</h3>
+<p>Out of 1,936 species pairs observed together at least five times, exactly <strong>four</strong> have robustly positive synergy:</p>
+<table class="caption-top table">
+<thead>
+<tr class="header">
+<th>Pair</th>
+<th>n (co-occurrences)</th>
+<th><span class="math inline">\(\langle v_s, v_{s'} \rangle\)</span></th>
+<th>5%–95%</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>Archaludon + Grimmsnarl</td>
+<td>495</td>
+<td>0.095</td>
+<td>0.003 – 0.206</td>
+</tr>
+<tr class="even">
+<td><strong>Kingambit + Sneasler</strong></td>
+<td>567</td>
+<td>0.091</td>
+<td>0.019 – 0.172</td>
+</tr>
+<tr class="odd">
+<td>Kingambit + Sinistcha</td>
+<td>388</td>
+<td>0.089</td>
+<td>0.019 – 0.170</td>
+</tr>
+<tr class="even">
+<td>E. F. Floette + Kingambit</td>
+<td>571</td>
+<td>0.080</td>
+<td>0.007 – 0.162</td>
+</tr>
+</tbody>
+</table>
+<p>The list reads like a who’s-who of known cores: Archaludon under Grimmsnarl screens (Light Clay’s robust item effect is the same engine seen from another block), and Kingambit appearing in three of the four pairs — the model has learned, from win/loss data alone, that Kingambit is the glue of the format’s dominant archetype. No negative pair reaches robustness, though Kingambit’s <em>anti</em>-synergies with Farigiraf, Archaludon and Grimmsnarl hover near the boundary — plausibly the model noticing role redundancy.</p>
+<p>The fact that the robust synergy pairs sit exactly inside the top teams is the kind of internal consistency you hope for but should still check: the FM term and the team ranking were estimated jointly, but nothing forced the <em>interpretable</em> pairs to align with the <em>empirically successful</em> rosters.</p>
+</section>
+<section id="did-non-linearity-help-no-and-that-is-a-result" class="level3" data-number="6.6">
+<h3 data-number="6.6" class="anchored" data-anchor-id="did-non-linearity-help-no-and-that-is-a-result"><span class="header-section-number">6.6</span> Did non-linearity help? No — and that is a result</h3>
+<p>The comparison that motivated the whole third model:</p>
+<table class="caption-top table">
+<thead>
+<tr class="header">
+<th>Model</th>
+<th>held-out log-loss</th>
+<th>held-out accuracy</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>Coin flip</td>
+<td>0.6931</td>
+<td>0.500</td>
+</tr>
+<tr class="even">
+<td>Bayesian additive (ADVI refit)</td>
+<td>0.6618</td>
+<td>0.614</td>
+</tr>
+<tr class="odd">
+<td><strong>Bayesian additive (NUTS refit)</strong></td>
+<td><strong>0.6584</strong></td>
+<td>0.601</td>
+</tr>
+<tr class="even">
+<td>Set Transformer</td>
+<td>0.6692</td>
+<td>~0.61</td>
+</tr>
+</tbody>
+</table>
+<p>The network does <strong>not</strong> beat the linear-in-features Bayesian model. The rigorous comparison — a full NUTS refit on an 85/15 training split, scored on the 2,638 held-out matches — puts the Bayesian model at <strong>0.6584</strong>, the best number of the three, with the Set Transformer at 0.6692. Proper Hamiltonian sampling therefore does not only produce honest intervals; it also predicts slightly better than its variational approximation. (One honesty note: the neural split is equal in size but not identical row-for-row to the Bayesian one — different RNGs — so the neural gap should be read as “clearly not better” rather than as a defeat by exactly that margin.)</p>
+<p>I want to resist the temptation to spin this. The Set Transformer was the right architecture for the hypothesis — attention over the six-slot set is precisely how you would let higher-order synergy express itself — and it was trained with the right regularisation for the data scale. It found nothing the additive model plus degree-2 synergy had missed. The conclusion I actually draw is a statement about the <em>game</em>, conditional on this data: at 17k matches, whatever higher-order interaction structure exists in the M-B metagame is not strong enough to be learnable past the noise floor set by unobserved in-battle decisions and the pilot effect. The regularised Bayesian model is not a baseline the deep model failed to beat; it is the right-sized model for the problem.</p>
+<p>The neural model’s team ranking is worth a glance for what it <em>disagrees</em> about: its top team (Incineroar / Gardevoir / Talonflame / Tsareena / Maushold / Basculegion) is nowhere near the Bayesian podium. With near-identical held-out loss, disagreements of this kind are mostly a display of estimation variance between two models fitting the same weak signal — a caution against over-reading <em>any</em> single model’s team list.</p>
+</section>
+<section id="how-predictable-is-a-vgc-match-anyway" class="level3" data-number="6.7">
+<h3 data-number="6.7" class="anchored" data-anchor-id="how-predictable-is-a-vgc-match-anyway"><span class="header-section-number">6.7</span> How predictable is a VGC match, anyway?</h3>
+<p>It is worth dwelling on the absolute numbers. The best model reaches log-loss 0.658 against a 0.693 coin flip and roughly 60% accuracy. That is a genuine edge — over thousands of matches it is decisive information — but it means the single match remains close to a fair coin even when you know both full teamlists <em>and</em> the pilots’ historical strength. The unmodelled residue is the game itself: open team sheet reading, leads, in-battle decisions, and honest-to-goodness RNG. Any service claiming to predict individual VGC matches with high confidence is selling something the data says does not exist.</p>
+</section>
+</section>
+<section id="what-this-means-for-worlds-and-why-it-is-already-going-stale" class="level2" data-number="7">
+<h2 data-number="7" class="anchored" data-anchor-id="what-this-means-for-worlds-and-why-it-is-already-going-stale"><span class="header-section-number">7</span> What this means for Worlds — and why it is already going stale</h2>
+<p>Pulling the threads together for the question we started with:</p>
+<ul>
+<li><strong>The archetype entering as the favourite</strong> is the Sneasler / Kingambit / Incineroar / Sinistcha core with flexible fifth and sixth slots — top of both Bayesian rankings, glued together by three of the four robustly positive synergy pairs in the entire format.</li>
+<li><strong>The robust individual signals</strong> are choices, not species: Encore, Weather Ball, Quick Guard, Swords Dance among moves; Venusaurite, Light Clay, Passho Berry among items; calm, special-leaning natures. No single Pokémon is a statistically established best pick.</li>
+<li><strong>The biggest single predictor of who wins is who is playing.</strong> Team choice is worth perhaps a fifth of the pilot, by posterior dispersion. Practice beats teambuilding — or more precisely, teambuilding differences among competent players are worth less than skill differences among them.</li>
+</ul>
+<p>And the necessary disclaimer, stated as a modelling assumption rather than a shrug: this entire analysis is a <strong>snapshot under stationarity</strong>. The model assumes the win-generating process is constant within the Regulation M-B window, and the metagame demonstrably is not — it adapts weekly, and it will adapt <em>to</em> whatever is currently winning, Sneasler cores included. There is also a population gap: this is online Limitless data, and the Worlds field (invite-only, in-person, best-of-three throughout) is a different distribution. The pipeline is built to be re-run — new tournaments in, canonicalisation, refit — and the honest way to use this model in August is on data pulled in August. Planned extensions, roughly in order: exponential time-decay of match weights (a power-posterior compromise), a row-for-row shared validation split across all three models (the NUTS and neural numbers above use equal-sized but independently drawn splits), extending the factorisation to move-and-item vectors, and a low-rank antisymmetric matchup term for the rock-paper-scissors structure a single strength scale cannot express.</p>
+</section>
+<section id="reproducibility" class="level2" data-number="8">
+<h2 data-number="8" class="anchored" data-anchor-id="reproducibility"><span class="header-section-number">8</span> Reproducibility</h2>
+<p>Everything — collection client, canonicaliser, design matrices, all three models, and the analysis notebooks — is at <a href="https://github.com/mat126/bayesian-ranking-vgc">github.com/mat126/bayesian-ranking-vgc</a>. The stack: PyMC with the numpyro/JAX backend on GPU for sampling (nutpie on CPU for iteration), PyTorch for the Set Transformer, PokéAPI’s multilingual tables plus rapidfuzz for cleaning. Posteriors are ~130–175 MB NetCDF files, regenerable from the pipeline; the run configuration travels inside a tagged artifacts JSON precisely so that no two posteriors can be compared without knowing they were estimated under the same thresholds.</p>
+<p><em>References in text: Bradley &amp; Terry (1952), Biometrika; Rendle (2010), ICDM (factorisation machines); Zaheer et al.&nbsp;(2017), NeurIPS (Deep Sets); Lee et al.&nbsp;(2019), ICML (Set Transformer); Betancourt &amp; Girolami (2015) (hierarchical funnel geometries).</em></p>
+</section>
+
+</main>
+<!-- /main column -->
+<script id="quarto-html-after-body" type="application/javascript">
+  window.document.addEventListener("DOMContentLoaded", function (event) {
+    const icon = "";
+    const anchorJS = new window.AnchorJS();
+    anchorJS.options = {
+      placement: 'right',
+      icon: icon
+    };
+    anchorJS.add('.anchored');
+    const isCodeAnnotation = (el) => {
+      for (const clz of el.classList) {
+        if (clz.startsWith('code-annotation-')) {                     
+          return true;
+        }
+      }
+      return false;
+    }
+    const onCopySuccess = function(e) {
+      // button target
+      const button = e.trigger;
+      // don't keep focus
+      button.blur();
+      // flash "checked"
+      button.classList.add('code-copy-button-checked');
+      var currentTitle = button.getAttribute("title");
+      button.setAttribute("title", "Copied!");
+      let tooltip;
+      if (window.bootstrap) {
+        button.setAttribute("data-bs-toggle", "tooltip");
+        button.setAttribute("data-bs-placement", "left");
+        button.setAttribute("data-bs-title", "Copied!");
+        tooltip = new bootstrap.Tooltip(button, 
+          { trigger: "manual", 
+            customClass: "code-copy-button-tooltip",
+            offset: [0, -8]});
+        tooltip.show();    
+      }
+      setTimeout(function() {
+        if (tooltip) {
+          tooltip.hide();
+          button.removeAttribute("data-bs-title");
+          button.removeAttribute("data-bs-toggle");
+          button.removeAttribute("data-bs-placement");
+        }
+        button.setAttribute("title", currentTitle);
+        button.classList.remove('code-copy-button-checked');
+      }, 1000);
+      // clear code selection
+      e.clearSelection();
+    }
+    const getTextToCopy = function(trigger) {
+      const outerScaffold = trigger.parentElement.cloneNode(true);
+      const codeEl = outerScaffold.querySelector('code');
+      for (const childEl of codeEl.children) {
+        if (isCodeAnnotation(childEl)) {
+          childEl.remove();
+        }
+      }
+      return codeEl.innerText;
+    }
+    const clipboard = new window.ClipboardJS('.code-copy-button:not([data-in-quarto-modal])', {
+      text: getTextToCopy
+    });
+    clipboard.on('success', onCopySuccess);
+    if (window.document.getElementById('quarto-embedded-source-code-modal')) {
+      const clipboardModal = new window.ClipboardJS('.code-copy-button[data-in-quarto-modal]', {
+        text: getTextToCopy,
+        container: window.document.getElementById('quarto-embedded-source-code-modal')
+      });
+      clipboardModal.on('success', onCopySuccess);
+    }
+      var localhostRegex = new RegExp(/^(?:http|https):\/\/localhost\:?[0-9]*\//);
+      var mailtoRegex = new RegExp(/^mailto:/);
+        var filterRegex = new RegExp('/' + window.location.host + '/');
+      var isInternal = (href) => {
+          return filterRegex.test(href) || localhostRegex.test(href) || mailtoRegex.test(href);
+      }
+      // Inspect non-navigation links and adorn them if external
+     var links = window.document.querySelectorAll('a[href]:not(.nav-link):not(.navbar-brand):not(.toc-action):not(.sidebar-link):not(.sidebar-item-toggle):not(.pagination-link):not(.no-external):not([aria-hidden]):not(.dropdown-item):not(.quarto-navigation-tool):not(.about-link)');
+      for (var i=0; i<links.length; i++) {
+        const link = links[i];
+        if (!isInternal(link.href)) {
+          // undo the damage that might have been done by quarto-nav.js in the case of
+          // links that we want to consider external
+          if (link.dataset.originalHref !== undefined) {
+            link.href = link.dataset.originalHref;
+          }
+            // target, if specified
+            link.setAttribute("target", "_blank");
+            if (link.getAttribute("rel") === null) {
+              link.setAttribute("rel", "noopener");
+            }
+        }
+      }
+    function tippyHover(el, contentFn, onTriggerFn, onUntriggerFn) {
+      const config = {
+        allowHTML: true,
+        maxWidth: 500,
+        delay: 100,
+        arrow: false,
+        appendTo: function(el) {
+            return el.parentElement;
+        },
+        interactive: true,
+        interactiveBorder: 10,
+        theme: 'quarto',
+        placement: 'bottom-start',
+      };
+      if (contentFn) {
+        config.content = contentFn;
+      }
+      if (onTriggerFn) {
+        config.onTrigger = onTriggerFn;
+      }
+      if (onUntriggerFn) {
+        config.onUntrigger = onUntriggerFn;
+      }
+      window.tippy(el, config); 
+    }
+    const noterefs = window.document.querySelectorAll('a[role="doc-noteref"]');
+    for (var i=0; i<noterefs.length; i++) {
+      const ref = noterefs[i];
+      tippyHover(ref, function() {
+        // use id or data attribute instead here
+        let href = ref.getAttribute('data-footnote-href') || ref.getAttribute('href');
+        try { href = new URL(href).hash; } catch {}
+        const id = href.replace(/^#\/?/, "");
+        const note = window.document.getElementById(id);
+        if (note) {
+          return note.innerHTML;
+        } else {
+          return "";
+        }
+      });
+    }
+    const xrefs = window.document.querySelectorAll('a.quarto-xref');
+    const processXRef = (id, note) => {
+      // Strip column container classes
+      const stripColumnClz = (el) => {
+        el.classList.remove("page-full", "page-columns");
+        if (el.children) {
+          for (const child of el.children) {
+            stripColumnClz(child);
+          }
+        }
+      }
+      stripColumnClz(note)
+      if (id === null || id.startsWith('sec-')) {
+        // Special case sections, only their first couple elements
+        const container = document.createElement("div");
+        if (note.children && note.children.length > 2) {
+          container.appendChild(note.children[0].cloneNode(true));
+          for (let i = 1; i < note.children.length; i++) {
+            const child = note.children[i];
+            if (child.tagName === "P" && child.innerText === "") {
+              continue;
+            } else {
+              container.appendChild(child.cloneNode(true));
+              break;
+            }
+          }
+          if (window.Quarto?.typesetMath) {
+            window.Quarto.typesetMath(container);
+          }
+          return container.innerHTML
+        } else {
+          if (window.Quarto?.typesetMath) {
+            window.Quarto.typesetMath(note);
+          }
+          return note.innerHTML;
+        }
+      } else {
+        // Remove any anchor links if they are present
+        const anchorLink = note.querySelector('a.anchorjs-link');
+        if (anchorLink) {
+          anchorLink.remove();
+        }
+        if (window.Quarto?.typesetMath) {
+          window.Quarto.typesetMath(note);
+        }
+        if (note.classList.contains("callout")) {
+          return note.outerHTML;
+        } else {
+          return note.innerHTML;
+        }
+      }
+    }
+    for (var i=0; i<xrefs.length; i++) {
+      const xref = xrefs[i];
+      tippyHover(xref, undefined, function(instance) {
+        instance.disable();
+        let url = xref.getAttribute('href');
+        let hash = undefined; 
+        if (url.startsWith('#')) {
+          hash = url;
+        } else {
+          try { hash = new URL(url).hash; } catch {}
+        }
+        if (hash) {
+          const id = hash.replace(/^#\/?/, "");
+          const note = window.document.getElementById(id);
+          if (note !== null) {
+            try {
+              const html = processXRef(id, note.cloneNode(true));
+              instance.setContent(html);
+            } finally {
+              instance.enable();
+              instance.show();
+            }
+          } else {
+            // See if we can fetch this
+            fetch(url.split('#')[0])
+            .then(res => res.text())
+            .then(html => {
+              const parser = new DOMParser();
+              const htmlDoc = parser.parseFromString(html, "text/html");
+              const note = htmlDoc.getElementById(id);
+              if (note !== null) {
+                const html = processXRef(id, note);
+                instance.setContent(html);
+              } 
+            }).finally(() => {
+              instance.enable();
+              instance.show();
+            });
+          }
+        } else {
+          // See if we can fetch a full url (with no hash to target)
+          // This is a special case and we should probably do some content thinning / targeting
+          fetch(url)
+          .then(res => res.text())
+          .then(html => {
+            const parser = new DOMParser();
+            const htmlDoc = parser.parseFromString(html, "text/html");
+            const note = htmlDoc.querySelector('main.content');
+            if (note !== null) {
+              // This should only happen for chapter cross references
+              // (since there is no id in the URL)
+              // remove the first header
+              if (note.children.length > 0 && note.children[0].tagName === "HEADER") {
+                note.children[0].remove();
+              }
+              const html = processXRef(null, note);
+              instance.setContent(html);
+            } 
+          }).finally(() => {
+            instance.enable();
+            instance.show();
+          });
+        }
+      }, function(instance) {
+      });
+    }
+        let selectedAnnoteEl;
+        const selectorForAnnotation = ( cell, annotation) => {
+          let cellAttr = 'data-code-cell="' + cell + '"';
+          let lineAttr = 'data-code-annotation="' +  annotation + '"';
+          const selector = 'span[' + cellAttr + '][' + lineAttr + ']';
+          return selector;
+        }
+        const selectCodeLines = (annoteEl) => {
+          const doc = window.document;
+          const targetCell = annoteEl.getAttribute("data-target-cell");
+          const targetAnnotation = annoteEl.getAttribute("data-target-annotation");
+          const annoteSpan = window.document.querySelector(selectorForAnnotation(targetCell, targetAnnotation));
+          const lines = annoteSpan.getAttribute("data-code-lines").split(",");
+          const lineIds = lines.map((line) => {
+            return targetCell + "-" + line;
+          })
+          let top = null;
+          let height = null;
+          let parent = null;
+          if (lineIds.length > 0) {
+              //compute the position of the single el (top and bottom and make a div)
+              const el = window.document.getElementById(lineIds[0]);
+              top = el.offsetTop;
+              height = el.offsetHeight;
+              parent = el.parentElement.parentElement;
+            if (lineIds.length > 1) {
+              const lastEl = window.document.getElementById(lineIds[lineIds.length - 1]);
+              const bottom = lastEl.offsetTop + lastEl.offsetHeight;
+              height = bottom - top;
+            }
+            if (top !== null && height !== null && parent !== null) {
+              // cook up a div (if necessary) and position it 
+              let div = window.document.getElementById("code-annotation-line-highlight");
+              if (div === null) {
+                div = window.document.createElement("div");
+                div.setAttribute("id", "code-annotation-line-highlight");
+                div.style.position = 'absolute';
+                parent.appendChild(div);
+              }
+              div.style.top = top - 2 + "px";
+              div.style.height = height + 4 + "px";
+              div.style.left = 0;
+              let gutterDiv = window.document.getElementById("code-annotation-line-highlight-gutter");
+              if (gutterDiv === null) {
+                gutterDiv = window.document.createElement("div");
+                gutterDiv.setAttribute("id", "code-annotation-line-highlight-gutter");
+                gutterDiv.style.position = 'absolute';
+                const codeCell = window.document.getElementById(targetCell);
+                const gutter = codeCell.querySelector('.code-annotation-gutter');
+                gutter.appendChild(gutterDiv);
+              }
+              gutterDiv.style.top = top - 2 + "px";
+              gutterDiv.style.height = height + 4 + "px";
+            }
+            selectedAnnoteEl = annoteEl;
+          }
+        };
+        const unselectCodeLines = () => {
+          const elementsIds = ["code-annotation-line-highlight", "code-annotation-line-highlight-gutter"];
+          elementsIds.forEach((elId) => {
+            const div = window.document.getElementById(elId);
+            if (div) {
+              div.remove();
+            }
+          });
+          selectedAnnoteEl = undefined;
+        };
+          // Handle positioning of the toggle
+      window.addEventListener(
+        "resize",
+        throttle(() => {
+          elRect = undefined;
+          if (selectedAnnoteEl) {
+            selectCodeLines(selectedAnnoteEl);
+          }
+        }, 10)
+      );
+      function throttle(fn, ms) {
+      let throttle = false;
+      let timer;
+        return (...args) => {
+          if(!throttle) { // first call gets through
+              fn.apply(this, args);
+              throttle = true;
+          } else { // all the others get throttled
+              if(timer) clearTimeout(timer); // cancel #2
+              timer = setTimeout(() => {
+                fn.apply(this, args);
+                timer = throttle = false;
+              }, ms);
+          }
+        };
+      }
+        // Attach click handler to the DT
+        const annoteDls = window.document.querySelectorAll('dt[data-target-cell]');
+        for (const annoteDlNode of annoteDls) {
+          annoteDlNode.addEventListener('click', (event) => {
+            const clickedEl = event.target;
+            if (clickedEl !== selectedAnnoteEl) {
+              unselectCodeLines();
+              const activeEl = window.document.querySelector('dt[data-target-cell].code-annotation-active');
+              if (activeEl) {
+                activeEl.classList.remove('code-annotation-active');
+              }
+              selectCodeLines(clickedEl);
+              clickedEl.classList.add('code-annotation-active');
+            } else {
+              // Unselect the line
+              unselectCodeLines();
+              clickedEl.classList.remove('code-annotation-active');
+            }
+          });
+        }
+    const findCites = (el) => {
+      const parentEl = el.parentElement;
+      if (parentEl) {
+        const cites = parentEl.dataset.cites;
+        if (cites) {
+          return {
+            el,
+            cites: cites.split(' ')
+          };
+        } else {
+          return findCites(el.parentElement)
+        }
+      } else {
+        return undefined;
+      }
+    };
+    var bibliorefs = window.document.querySelectorAll('a[role="doc-biblioref"]');
+    for (var i=0; i<bibliorefs.length; i++) {
+      const ref = bibliorefs[i];
+      const citeInfo = findCites(ref);
+      if (citeInfo) {
+        tippyHover(citeInfo.el, function() {
+          var popup = window.document.createElement('div');
+          citeInfo.cites.forEach(function(cite) {
+            var citeDiv = window.document.createElement('div');
+            citeDiv.classList.add('hanging-indent');
+            citeDiv.classList.add('csl-entry');
+            var biblioDiv = window.document.getElementById('ref-' + cite);
+            if (biblioDiv) {
+              citeDiv.innerHTML = biblioDiv.innerHTML;
+            }
+            popup.appendChild(citeDiv);
+          });
+          return popup.innerHTML;
+        });
+      }
+    }
+  });
+  </script>
+</div> <!-- /content -->
+
+
+
+
+</body></html>
