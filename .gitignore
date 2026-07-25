@@ -1,23 +1,21 @@
-# dati rigenerabili dalla pipeline
-data/
+# dati rigenerabili (tieni solo il README)
+data/*
+!data/README.md
 pokeapi_csv/
 
-# artefatti pesanti dei modelli
-models/
-*.nc
-*.pt
-bt_artifacts.json
-neural_vocab.json
+# artefatti pesanti dei modelli (troppo grandi per GitHub; tieni solo il README)
+models/*
+!models/README.md
 
-# python
+# cache python
 __pycache__/
 *.py[cod]
 .ipynb_checkpoints/
 .venv/
 env/
 
-# scratch / editor
-tempCodeRunnerFile.py
+# scarto / editor
+controlli_dati.py
 struttura.txt
 _preview.png
 .vscode/

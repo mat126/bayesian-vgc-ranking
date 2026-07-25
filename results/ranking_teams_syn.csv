@@ -1,0 +1,96 @@
+team,n,mean,q5,q95
+Sneasler / Blastoise / Kingambit / Incineroar / Delphox / Sinistcha,7,2.0674002431364435,1.7011432634486245,2.4400029380420083
+Blastoise / Delphox / Sneasler / Incineroar / Sinistcha / Kingambit,5,1.9338170968307553,1.564004466688525,2.294833632716945
+Delphox / Eternal Flower Floette / Sinistcha / Kingambit / Sneasler / Incineroar,7,1.910892196190749,1.5808799183728335,2.2518599511088015
+Sinistcha / Kingambit / Sneasler / Eternal Flower Floette / Delphox / Incineroar,8,1.909127297536644,1.5860835797028556,2.2513158958595727
+Froslass / Scovillain / Basculegion / Kingambit / Lycanroc Dusk / Sneasler,8,1.8445223158273136,1.4825762293267966,2.214985131703704
+Basculegion / Kingambit / Sneasler / Incineroar / Sinistcha / Eternal Flower Floette,7,1.7766845061434606,1.3946473343633528,2.1798253618751735
+Gengar / Swampert / Incineroar / Politoed / Archaludon / Vivillon,8,1.7716145253200037,1.3387313907672906,2.224895290787094
+Froslass / Scovillain / Sneasler / Kingambit / Basculegion / Lycanroc Dusk,7,1.7275029633786636,1.3722903511197921,2.082117935928069
+Sinistcha / Incineroar / Milotic / Raichu / Eternal Flower Floette / Ceruledge,21,1.7010452946481573,1.3491019002249438,2.0739136830907228
+Froslass / Scovillain / Basculegion / Kingambit / Sneasler / Lycanroc Dusk,5,1.6647509860336995,1.3069788685543913,2.016813752387234
+Swampert / Pelipper / Archaludon / Venusaur / Maushold / Gholdengo,7,1.6164674792029359,1.2213825821638162,2.0298904988049107
+Incineroar / Gardevoir / Talonflame / Tsareena / Maushold / Basculegion,5,1.6119659526729482,1.0953983247858006,2.1642561137450875
+Sinistcha / Incineroar / Milotic / Raichu / Floette / Ceruledge,6,1.5775564950865473,1.1643107389425493,2.0132269802218055
+Charizard / Sylveon / Aerodactyl / Farigiraf / Garchomp / Kingambit,5,1.5760106932568068,1.2454234106543696,1.915601470383477
+Kingambit / Charizard / Garchomp / Basculegion / Whimsicott / Eternal Flower Floette,5,1.5676546783568224,1.2517299965742046,1.8834737506145445
+Eternal Flower Floette / Charizard / Whimsicott / Garchomp / Basculegion / Kingambit,5,1.5649838863273602,1.250082628674117,1.8816730612629202
+Eternal Flower Floette / Charizard / Whimsicott / Garchomp / Basculegion / Kingambit,35,1.5622286025873684,1.2646175356490679,1.864225404683916
+Charizard / Aerodactyl / Farigiraf / Garchomp / Sylveon / Kingambit,6,1.5572787939448238,1.2428050390168912,1.8892915429357044
+Charizard / Farigiraf / Venusaur / Garchomp / Incineroar / Sylveon,6,1.5408018311765301,1.1885868407328817,1.8975298522859576
+Kingambit / Charizard / Aerodactyl / Farigiraf / Garchomp / Sylveon,9,1.5384074512781731,1.230034855202279,1.8507849621983834
+Kingambit / Charizard / Aerodactyl / Farigiraf / Garchomp / Sylveon,23,1.537863157490588,1.2265960073672288,1.8528748183609982
+Aerodactyl / Garchomp / Kingambit / Charizard / Sylveon / Farigiraf,5,1.5280174292051627,1.2003944430736182,1.8568137544210692
+Sneasler / Incineroar / Eternal Flower Floette / Kingambit / Sinistcha / Dragapult,6,1.5011015953088576,1.0217288675127578,2.0029973076719205
+Metagross / Charizard / Aerodactyl / Sylveon / Hisuian Samurott / Garchomp,6,1.500751298708152,1.0699069999690565,1.9494702671206448
+Charizard / Eternal Flower Floette / Garchomp / Whimsicott / Kingambit / Basculegion,28,1.4994766252424045,1.205847447269531,1.7920626403444353
+Charizard / Eternal Flower Floette / Aegislash / Incineroar / Garchomp / Sinistcha,5,1.4994055500592145,1.0203053573119676,1.9842725525464209
+Charizard / Garchomp / Whimsicott / Hydreigon / Sneasler / Basculegion,6,1.497941196507318,1.0699915661293924,1.9388437175163629
+Charizard / Garchomp / Venusaur / Sylveon / Farigiraf / Incineroar,6,1.4935901369195923,1.1437676215121761,1.8552360865106012
+Charizard / Aerodactyl / Kingambit / Farigiraf / Sylveon / Garchomp,11,1.4912335393811842,1.1915176776178384,1.8031291909539529
+Charizard / Whimsicott / Garchomp / Basculegion / Sylveon / Hydreigon,6,1.4727889317196212,1.0625367660635947,1.9077208819761942
+Charizard / Aerodactyl / Garchomp / Kingambit / Sylveon / Farigiraf,5,1.4679022306916278,1.1561713190391762,1.7839044228987124
+Pyroar / Scrafty / Farigiraf / Torkoal / Venusaur / Mamoswine,11,1.4549591249188172,1.0510166347313046,1.8754329933784484
+Charizard / Basculegion / Kingambit / Eternal Flower Floette / Whimsicott / Garchomp,19,1.4499367742009879,1.1451921064709514,1.7588599193777312
+Archaludon / Swampert / Pelipper / Gardevoir / Sinistcha / Incineroar,5,1.4468303026520837,1.0017230508923778,1.8925323349082517
+Whimsicott / Eternal Flower Floette / Charizard / Garchomp / Basculegion / Kingambit,8,1.4456568287206102,1.1404196530560375,1.7515883867558206
+Excadrill / Tyranitar / Corviknight / Hydreigon / Scovillain / Houndstone,7,1.4446765521677316,0.9899555573346516,1.9108048541223948
+Swampert / Maushold / Archaludon / Pelipper / Gholdengo / Dragonite,6,1.4359460747115655,0.9851695067434432,1.8907313134374353
+Charizard / Aerodactyl / Garchomp / Sylveon / Kingambit / Incineroar,10,1.4320572254624269,1.0666404350345102,1.8210296086471853
+Gholdengo / Incineroar / Basculegion / Garchomp / Charizard / Whimsicott,10,1.4295402202106215,1.0768024397615732,1.7894729588481395
+Blastoise / Delphox / Incineroar / Sneasler / Sinistcha / Maushold,12,1.4214079879955634,1.055780757069632,1.7996436176751391
+Charizard / Eternal Flower Floette / Garchomp / Basculegion / Incineroar / Whimsicott,5,1.4081908895719064,1.0803089621449147,1.7456653167631504
+Scrafty / Farigiraf / Torkoal / Kingambit / Sneasler / Pyroar,6,1.4043794776019813,0.9072046405334813,1.9163995618943648
+Charizard / Whimsicott / Eternal Flower Floette / Garchomp / Basculegion / Kingambit,7,1.389749362050651,1.0775430993610247,1.7069738426719643
+Metagross / Charizard / Aerodactyl / Sylveon / Garchomp / Incineroar,5,1.3870270253599575,1.0192734551994518,1.7664730673177715
+Grimmsnarl / Swampert / Pelipper / Archaludon / Sinistcha / Metagross,52,1.3806431834285235,1.0721186909175986,1.7101813087944273
+Swampert / Pelipper / Sinistcha / Archaludon / Grimmsnarl / Gholdengo,12,1.3667052503911277,0.9862684662421395,1.7454463842343293
+Sylveon / Farigiraf / Garchomp / Kingambit / Aerodactyl / Charizard,10,1.3659351218693265,1.0402636425609373,1.7024701151797095
+Pyroar / Vileplume / Torkoal / Incineroar / Eternal Flower Floette / Farigiraf,7,1.3535791365320162,0.938591690008417,1.798513988935433
+Charizard / Whimsicott / Garchomp / Basculegion / Gholdengo / Incineroar,10,1.3456884123099775,0.9991462482869178,1.6914199870980442
+Charizard / Eternal Flower Floette / Garchomp / Basculegion / Incineroar / Whimsicott,5,1.3454389122269428,1.0203225843006793,1.6881366326806013
+Delphox / Garchomp / Sneasler / Kingambit / Sinistcha / Alolan Ninetales,7,1.3444056073724844,0.8788464938431558,1.8111617041272667
+Torkoal / Farigiraf / Sylveon / Kingambit / Appletun / Kangaskhan,6,1.340946772754569,0.8581052597519323,1.8247966470251469
+Mawile / Farigiraf / Whimsicott / Garchomp / Basculegion / Charizard,7,1.317911811394658,0.9451923254689136,1.6950999392495207
+Swampert / Grimmsnarl / Pelipper / Archaludon / Sinistcha / Metagross,8,1.3152906990112796,0.9993679804190855,1.6485595962003226
+Gholdengo / Charizard / Sneasler / Whimsicott / Basculegion / Garchomp,6,1.3115573793602255,0.9315166604074151,1.6896646211473278
+Kingambit / Charizard / Farigiraf / Aerodactyl / Sylveon / Garchomp,5,1.2934251858152135,0.9488557216061945,1.626488046122956
+Swampert / Grimmsnarl / Archaludon / Pelipper / Staraptor / Sinistcha,6,1.2781288074158075,0.8773476396579766,1.6764968610469335
+Raichu / Mawile / Sinistcha / Ceruledge / Milotic / Incineroar,25,1.2719312644281544,0.9088613844357167,1.6446115080348298
+Charizard / Sylveon / Garchomp / Kingambit / Aerodactyl / Farigiraf,5,1.2588537117236287,0.9087113790983546,1.6073057697153394
+Raichu / Kingambit / Mamoswine / Ceruledge / Gyarados / Clefable,6,1.2533614622865608,0.7885534531228285,1.7579162173412148
+Dragonite / Basculegion / Scizor / Archaludon / Pelipper / Incineroar,5,1.2513975665344355,0.7659970222834371,1.757759494066535
+Metagross / Sneasler / Hydreigon / Incineroar / Aerodactyl / Eternal Flower Floette,8,1.2390697526957628,0.8193789612289764,1.665906580635248
+Raichu / Gholdengo / Garchomp / Eternal Flower Floette / Whimsicott / Basculegion,11,1.2348538147732209,0.8764900871920034,1.598471495999567
+Pyroar / Ninetales / Whimsicott / Eternal Flower Floette / Basculegion / Farigiraf,13,1.2306830722930768,0.887230682686266,1.5856437833324035
+Staraptor / Houndstone / Tyranitar / Wash Rotom / Excadrill / Venusaur,7,1.230309351599803,0.7711691797519424,1.6851191135868893
+Swampert / Grimmsnarl / Pelipper / Archaludon / Sinistcha / Metagross,5,1.2239205487534999,0.9121674955821789,1.5449164117424767
+Delphox / Garchomp / Azumarill / Sinistcha / Incineroar / Glimmora,5,1.2198838511631538,0.6907477857494182,1.8045640317005147
+Pyroar / Whimsicott / Basculegion / Ninetales / Farigiraf / Eternal Flower Floette,14,1.2179274033402077,0.8835247262721143,1.5683714437943221
+Pelipper / Sneasler / Archaludon / Swampert / Sinistcha / Grimmsnarl,5,1.2139034429504476,0.8136751562994483,1.6050762079765957
+Charizard / Whimsicott / Garchomp / Sneasler / Basculegion / Sylveon,5,1.1864400048943593,0.8227488803413342,1.558398965130797
+Basculegion / Gholdengo / Whimsicott / Eternal Flower Floette / Garchomp / Raichu,8,1.172101837428257,0.8183654028522114,1.5259153974483113
+Charizard / Aerodactyl / Garchomp / Basculegion / Kingambit / Sylveon,5,1.1475001261516686,0.8335286114352656,1.4729880407403042
+Torkoal / Farigiraf / Sylveon / Kingambit / Vileplume / Kangaskhan,6,1.1334983718415448,0.7189434830603759,1.5649320774844995
+Eternal Flower Floette / Sneasler / Sinistcha / Incineroar / Grimmsnarl / Wash Rotom,5,1.1113547035227453,0.6364721496475408,1.5876194018436125
+Hydreigon / Garchomp / Metagross / Charizard / Grimmsnarl / Toxapex,32,1.109485318192955,0.7919292448456462,1.440263510968746
+Scrafty / Vileplume / Staraptor / Farigiraf / Sylveon / Torkoal,8,1.1065840764223465,0.7158913153920624,1.5095269917916434
+Pyroar / Whimsicott / Ninetales / Farigiraf / Basculegion / Floette,8,1.1023617193801223,0.7129298053921536,1.4992254993711698
+Garchomp / Sneasler / Maushold / Delphox / Azumarill / Incineroar,5,1.078402622162787,0.5649568187735525,1.6231946279873513
+Swampert / Eternal Flower Floette / Pelipper / Grimmsnarl / Sinistcha / Archaludon,14,1.0737320161512323,0.7206676042667853,1.4296362306113546
+Gengar / Sylveon / Incineroar / Sneasler / Swampert / Politoed,5,1.0271804930391886,0.510883096959463,1.5920674823492917
+Blaziken / Hydreigon / Basculegion / Whimsicott / Farigiraf / Metagross,8,0.9937638257192823,0.5947473568431434,1.3853458924658053
+Blaziken / Aerodactyl / Kingambit / Basculegion / Sylveon / Torkoal,19,0.9889875286220601,0.6425750263407556,1.3460985946120947
+Scrafty / Metagross / Mamoswine / Toxapex / Dragonite / Charizard,8,0.9840710107298694,0.48010226574732595,1.4918764938454603
+Blaziken / Kingambit / Alolan Ninetales / Aerodactyl / Sylveon / Basculegion,5,0.966086181894467,0.5860375326960388,1.3446052237898076
+Mawile / Torkoal / Vileplume / Farigiraf / Kangaskhan / Gallade,5,0.9210733966996133,0.46851237556337105,1.3876757398279795
+Staraptor / Raichu / Farigiraf / Sinistcha / Whimsicott / Garchomp,6,0.8611056142575599,0.4162951013263193,1.320885709204995
+Charizard / Eternal Flower Floette / Kingambit / Basculegion / Whimsicott / Garchomp,8,0.8544938590271911,0.42259444317267764,1.294759855943679
+Archaludon / Sableye / Swampert / Pelipper / Sinistcha / Basculegion,8,0.7326794928022733,0.3278855417177733,1.1386674295955317
+Golurk / Farigiraf / Torkoal / Oranguru / Venusaur / Staraptor,8,0.7214513215144857,0.1923788350625496,1.2714719127469505
+Archaludon / Pelipper / Sableye / Basculegion / Dragonite / Sinistcha,6,0.6111571361301745,0.16739073174343863,1.0436310143581982
+Sceptile / Heat Rotom / Basculegion / Aerodactyl / Garchomp / Eternal Flower Floette,6,0.6061622810342548,0.22593304478462467,1.0017112534248696
+Charizard / Garchomp / Aerodactyl / Sylveon / Kingambit / Basculegion,8,0.5135278521548128,0.10717573759597879,0.9233911211517499
+Sylveon / Raichu / Basculegion / Azumarill / Politoed / Gengar,8,0.37500425460822234,-0.20997469824907034,0.9340402928237429
+Sinistcha / Sneasler / Archaludon / Swampert / Politoed / Grimmsnarl,9,0.17162305129285968,-0.45926128053149745,0.7738873127388467
+Pelipper / Grimmsnarl / Raichu / Sinistcha / Eelektross / Garchomp,6,-0.058200962227739066,-0.5442483135499419,0.42322329033719025
